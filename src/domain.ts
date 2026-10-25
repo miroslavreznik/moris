@@ -18,6 +18,8 @@ export const STAGES = [
   { name: 'Leggy Moris', xp: 150, description: 'A pair of legs and absolutely no coordination. Still moving forward.' },
   { name: 'Primate-ish Moris', xp: 350, description: 'A little fluff. A lot of confidence. Definitely not a biology lesson.' },
   { name: 'Super Moris', xp: 700, description: 'A gloriously odd work in progress. There is always another little thing to do.' },
+  { name: 'Cosmic Moris', xp: 1200, description: 'Outgrew the pond. Acquired an orbit. Still occasionally bumps into things.' },
+  { name: 'Moris the Infinite', xp: 2000, description: 'Has transcended several dimensions. Still needs a little nudge to go for a walk.' },
 ] as const;
 export const ICONS = ['book', 'walk', 'sun', 'move', 'spark', 'heart', 'coffee', 'pen'] as const;
 export const COLORS = ['#1839d5', '#c24f24', '#477246', '#8d4b90', '#2d7388'];

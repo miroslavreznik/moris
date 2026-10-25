@@ -1,4 +1,4 @@
-import { type Snapshot, type Schedule, type Habit, type Revision, type Completion, DEFAULT_SETTINGS, serial, revisionAt, scheduled, activeOn } from './domain';
+import { type Snapshot, type Schedule, type Habit, type Revision, type Completion, DEFAULT_SETTINGS, STAGES, serial, revisionAt, scheduled, activeOn } from './domain';
 export type Backup = Snapshot & { schemaVersion: 1; exportedAt: string };
 export function backupOf(state: Snapshot): Backup { return { ...state, schemaVersion: 1, exportedAt: new Date().toISOString() }; }
 export function downloadBackup(state: Snapshot, prefix = 'moris-backup'): void {
@@ -53,5 +53,5 @@ export function parseBackup(input: unknown): Snapshot {
     return { id: c.id, habitId: c.habitId, localDate: c.localDate, createdAt: c.createdAt, timeZone: c.timeZone };
   });
   if (!object(input.settings) || typeof input.settings.soundEnabled !== 'boolean' || typeof input.settings.animationsEnabled !== 'boolean') fail('settings are missing or invalid.');
-  return { habits, revisions, completions, settings: { ...DEFAULT_SETTINGS, soundEnabled: input.settings.soundEnabled, animationsEnabled: input.settings.animationsEnabled, celebratedStage: Number.isInteger(input.settings.celebratedStage) ? Math.min(4, Math.max(0, input.settings.celebratedStage as number)) : 0 }, onboardingComplete: true };
+  return { habits, revisions, completions, settings: { ...DEFAULT_SETTINGS, soundEnabled: input.settings.soundEnabled, animationsEnabled: input.settings.animationsEnabled, celebratedStage: Number.isInteger(input.settings.celebratedStage) ? Math.min(STAGES.length - 1, Math.max(0, input.settings.celebratedStage as number)) : 0 }, onboardingComplete: true };
 }

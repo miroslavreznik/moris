@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type Habit, type Revision, type Completion, type Schedule, type Snapshot, EMPTY, addDays, today, monday, weekday, dayState, habitStats, weekInfo, xpOf, stageOf, toggleCompletion, demoSnapshot, revisionAt } from './domain';
+import { type Habit, type Revision, type Completion, type Schedule, type Snapshot, EMPTY, STAGES, addDays, today, monday, weekday, dayState, habitStats, weekInfo, xpOf, stageOf, toggleCompletion, demoSnapshot, revisionAt } from './domain';
 const habit: Habit = { id: 'read', title: 'Read', icon: 'book', color: '#1839d5', createdAt: '2026-10-19T12:00:00Z', startDate: '2026-10-19' };
 const rev = (schedule: Schedule, effectiveFrom = habit.startDate): Revision => ({ id: `revision-${effectiveFrom}`, habitId: habit.id, effectiveFrom, schedule });
 const done = (...days: string[]): Completion[] => days.map(localDate => ({ id: `${habit.id}:${localDate}`, habitId: habit.id, localDate, timeZone: 'Europe/Budapest', createdAt: `${localDate}T12:00:00Z` }));
@@ -75,6 +75,14 @@ describe('streaks and weekly quotas', () => {
   });
 });
 describe('completion and rewards', () => {
+  it('preserves the original forms and extends progression at the new boundaries', () => {
+    expect(STAGES.slice(0, 5).map(s => s.xp)).toEqual([0, 50, 150, 350, 700]);
+    expect(stageOf(1190)).toBe(4);
+    expect(STAGES[stageOf(1200)].name).toBe('Cosmic Moris');
+    expect(stageOf(1990)).toBe(5);
+    expect(STAGES[stageOf(2000)].name).toBe('Moris the Infinite');
+    expect(stageOf(5000)).toBe(6);
+  });
   it('undoes and redoes a completion without duplicate rewards', () => {
     const first = toggleCompletion(snapshot(), habit.id, '2026-10-25', '2026-10-25', 'Europe/Budapest');
     const undone = toggleCompletion(first, habit.id, '2026-10-25', '2026-10-25');

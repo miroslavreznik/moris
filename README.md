@@ -35,7 +35,7 @@ The production preview is normally at `http://localhost:4173`. The development s
 - Immediate one-tap completion, undo, a seven-day strip on Today, and local persistence.
 - Separate goal overviews, 35-day calendars, historical corrections, current/best streaks, and up to 12 weeks of quota history.
 - Prospective schedule revisions. A completed current day keeps its schedule; changes then start tomorrow or later. Partial first/changed weeks cannot become failed weekly streaks.
-- Five original SVG evolution stages, derived XP, one-time skippable unlock celebrations, optional interaction-triggered audio, and reduced-motion support.
+- Seven original SVG evolution stages, derived XP, one-time skippable unlock celebrations, a next-evolution meter, optional interaction-triggered audio, and reduced-motion support.
 - IndexedDB via Dexie, a unique habit/date index, versioned schema, and transactional writes.
 - Versioned JSON export/import, record validation, a pre-restore download, and a safety backup stored atomically before replacement. Failed replacement rolls back.
 - PWA manifest, standard and maskable icons, Apple touch icon, locally bundled fonts, offline app shell, safe-area layout, and an explicit app-update prompt that waits for pending writes.
@@ -51,6 +51,7 @@ With the production preview running in a second terminal:
 
 ```sh
 npm run test:browser
+npm run test:evolution
 ```
 
 The browser suite uses installed Microsoft Edge on Windows. Elsewhere install Playwright Chromium with `npx playwright install chromium`. `MORIS_TEST_URL` can override the preview address; `MORIS_BROWSER` can override the Windows browser channel.
@@ -71,6 +72,10 @@ OpenAI Sites is the approved private hosting destination. See `docs/deployment.m
 
 Deploy the contents of `dist/` at the **origin root over HTTPS**. Rewrite navigation requests to `index.html`; serve JavaScript, CSS, manifest, and icon requests as actual files. Do not cache `index.html` or `sw.js` indefinitely; hashed assets may use immutable caching. The manifest and service-worker scope are root-relative.
 
-The application runs and passes automated local checks. The full PRD definition of done still requires an HTTPS deployment and physical iPhone/Safari and Android/Chrome installation, standalone launch, offline restart, and update checks. Browser emulation is not a substitute for that device validation.
+Moris is privately deployed at https://moris-habit-club.miroslavreznik.chatgpt.site. Sign in with the owner’s ChatGPT account at the hosting gate. App data remains device-local. The full PRD definition of done still requires authenticated hosted-resource checks and physical iPhone/Safari and Android/Chrome installation, standalone launch, offline restart, and update checks. Browser emulation is not a substitute for that device validation.
 
 Original specification: `Moris_PRD_MVP_PWA_EN.md`.
+
+## More kinds of weird
+
+The original five thresholds stay at 0, 50, 150, 350, and 700 XP. Cosmic Moris adds a planetary ring and moon at 1,200 XP. Moris the Infinite adds cosmic arms, a double halo, and an infinity emblem at 2,000 XP. Earned XP carries straight into the extended progression; the IndexedDB schema and backup format remain unchanged. Backups retain celebration history for all seven forms.

@@ -3,7 +3,7 @@
 ## Verified locally, October 25, 2026
 
 - TypeScript checking and the production Vite/PWA build pass.
-- 32 domain, backup-validation, and IndexedDB tests pass.
+- 35 domain, backup-validation, and IndexedDB tests pass.
 - 13 production-browser checks pass in Microsoft Edge, with a Europe/Budapest browser time zone.
 - Responsive review includes all four screens at 320 CSS px, a 390 px mobile view, and a 1440 px desktop view. Screenshots are generated in ignored `test-results/`.
 - The generated service worker precaches the app shell, JavaScript, CSS, fonts, and icons. The normal and demonstration databases are separate.
@@ -30,7 +30,7 @@ Unit checks additionally cover DST date arithmetic, fixed-schedule missed/due/fu
 
 These have **not** been performed and are required before claiming the PRD's full MVP definition of done:
 
-- Deploy a production build over HTTPS with appropriate navigation fallback/cache headers.
+- HTTPS publication is complete at `https://moris-habit-club.miroslavreznik.chatgpt.site`, with native deployment success recorded in `docs/deployment.md`. The private gate responds over HTTPS. Authenticated app navigation, manifest/service-worker/icon responses, and cache-header behavior still require sign-in verification.
 - On a physical iPhone, install through Safari's Share → Add to Home Screen; verify standalone launch, safe areas, keyboard/dialog behavior, and manual install guidance.
 - On a physical Android phone, verify the available browser install flow and standalone launch.
 - On both devices, load online once, close the app, disable the connection, reopen, create/complete a habit, close/reopen, and verify persistence.
@@ -38,4 +38,14 @@ These have **not** been performed and are required before claiming the PRD's ful
 - Verify device-specific audio, muted behavior, optional haptics, reduced motion, storage-permission/failure handling, backup-file saving, and reimport from the real device's file picker.
 - Dogfood with a few real habits and review the size/readability of the per-goal cells on the intended phones.
 
-No production deployment or physical-device validation is claimed by the automated checks.
+Production deployment is confirmed by Sites independently of the local automated checks. Physical-device validation and authenticated hosted-app checks are not claimed.
+
+## Seven-form evolution upgrade
+
+The added evolution suite passes three browser scenarios in addition to the 13 existing production-browser checks:
+
+- Cosmic Moris unlocks at 1,200 XP with its own SVG illustration, skippable celebration, and next-evolution progress.
+- Moris the Infinite unlocks at 2,000 XP. Undo/redo and reload retain all 200 test completions and celebration history without duplicate XP or replayed celebrations.
+- A pre-existing higher-XP profile discovers the newly added forms once after an update. The seven-form screen fits at 320 CSS px.
+
+Additional unit checks preserve the original five thresholds, verify both new boundaries, preserve old backup records, and restore celebration state for the added forms. Screenshots are `test-results/new-moris-stages.png` and `test-results/evolution-mobile.png`.

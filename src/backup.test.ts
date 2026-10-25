@@ -1,8 +1,22 @@
 import { describe, it, expect } from 'vitest';
 import { backupOf, parseBackup } from './backup';
-import { demoSnapshot } from './domain';
+import { demoSnapshot, STAGES } from './domain';
 const sample = () => backupOf(demoSnapshot('2026-10-25'));
 describe('safe backup parsing', () => {
+  it('keeps celebrations for the added forms when restoring a backup', () => {
+    const backup = sample();
+    backup.settings.celebratedStage = 6;
+    expect(parseBackup(backup).settings.celebratedStage).toBe(6);
+    backup.settings.celebratedStage = 999;
+    expect(parseBackup(backup).settings.celebratedStage).toBe(STAGES.length - 1);
+  });
+  it('restores an original five-form backup without changing its progress or unlock history', () => {
+    const backup = sample(); backup.settings.celebratedStage = 4;
+    const restored = parseBackup(backup);
+    expect(restored.settings.celebratedStage).toBe(4);
+    expect(restored.completions).toEqual(backup.completions);
+    expect(restored.habits).toEqual(backup.habits);
+  });
   it('round-trips all local records and their dates', () => {
     const backup = sample(); expect(parseBackup(JSON.parse(JSON.stringify(backup)))).toEqual(demoSnapshot('2026-10-25'));
   });

@@ -9,7 +9,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "typecheck": "tsc -b",
-    "test:browser": "node scripts/browser-check.cjs"
+    "test:browser": "node scripts/browser-check.cjs",
+    "test:evolution": "node scripts/evolution-check.cjs"
   },
   "dependencies": {
     "@fontsource/barlow-condensed": "5.3.0",
