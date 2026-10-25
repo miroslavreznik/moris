@@ -4,7 +4,7 @@
 
 - TypeScript checking and the production Vite/PWA build pass.
 - 35 domain, backup-validation, and IndexedDB tests pass.
-- 13 production-browser checks pass in Microsoft Edge, with a Europe/Budapest browser time zone.
+- 15 production-browser checks pass in Microsoft Edge, with a Europe/Budapest browser time zone, plus three evolution browser checks.
 - Responsive review includes all four screens at 320 CSS px, a 390 px mobile view, and a 1440 px desktop view. Screenshots are generated in ignored `test-results/`.
 - The generated service worker precaches the app shell, JavaScript, CSS, fonts, and icons. The normal and demonstration databases are separate.
 
@@ -23,6 +23,8 @@ The browser checks cover:
 11. Reduced motion disabling creature animation without impairing completion.
 12. Manifest and standard/maskable icon responses.
 13. Completion immediately after midnight using the new local date before the dashboard refresh timer fires.
+14. Tapping the habit title or completion icon records today without navigation or a date picker; the separate View history action opens the same habit's existing record without changing it.
+15. Weekly habits also record today directly, and Space/Enter toggle completion without duplicate XP. The exported record uses today's local date.
 
 Unit checks additionally cover DST date arithmetic, fixed-schedule missed/due/future states, weekly period boundaries, partial first/changed weeks, historical schedule revisions, archived rewards and archive-day undo, time-zone retention, unique completion indexes, database reopen, transactional replacement rollback, invalid schedules/dates/references/zones, and archiving a not-yet-started habit.
 

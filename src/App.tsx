@@ -89,7 +89,7 @@ function Legend({ weekly = false }: { weekly?: boolean }) { return <div classNam
 
 function MiniHistory({ habit, data, now, choose }: { habit: Habit; data: Snapshot; now: Day; choose: () => void }) {
   const days = dates(addDays(now, -6), now);
-  return <button className="mini-history" onClick={choose} aria-label={`See progress for ${habit.title}`}><span>LAST 7 DAYS</span><span className="mini-cells">{days.map(day => { const state = dayState(habit, data.revisions, data.completions, day, now); return <span className={`mini-cell ${state}`} key={day} aria-label={`${formatDay(day)}: ${stateLabels[state]}`}>{state === 'completed' ? '✓' : state === 'not_scheduled' ? '—' : '·'}</span>; })}</span><ArrowRight size={14} aria-hidden="true" /></button>;
+  return <button type="button" className="mini-history" onClick={choose} aria-label={`View history for ${habit.title}`}><span>VIEW HISTORY</span><span className="mini-cells" aria-label="Last 7 days">{days.map(day => { const state = dayState(habit, data.revisions, data.completions, day, now); return <span className={`mini-cell ${state}`} key={day} aria-label={`${formatDay(day)}: ${stateLabels[state]}`}>{state === 'completed' ? '✓' : state === 'not_scheduled' ? '—' : '·'}</span>; })}</span><ArrowRight size={14} aria-hidden="true" /></button>;
 }
 
 function HabitTicket({ habit, data, now, index, complete, select }: { habit: Habit; data: Snapshot; now: Day; index: number; complete: (habit: Habit, day: Day) => void; select: () => void }) {
@@ -97,7 +97,13 @@ function HabitTicket({ habit, data, now, index, complete, select }: { habit: Hab
   const done = completedOn(data.completions, habit.id, now);
   const weekly = schedule?.type === 'weekly_target';
   const week = weekly ? weekInfo(habit, data.revisions, data.completions, monday(now), now) : null;
-  return <article className={`habit-ticket ${done ? 'is-done' : ''} ${weekly ? 'is-weekly' : ''}`} style={{ '--habit-color': habit.color } as React.CSSProperties}><div className="ticket-main"><button className="ticket-name" onClick={select}><span className="ticket-number">Nº {String(index + 1).padStart(3, '0')} <Icon name={habit.icon} size={15} /></span><h3>{habit.title}</h3><span className="ticket-context">{week ? `${week.count}/${week.target} this week${week.partial ? ' · partial period' : ''}${week.state === 'completed' ? ' · goal reached' : ' · any day'}` : done ? 'Stamped today. Nicely done.' : schedule ? scheduleLabel(schedule) : 'No active schedule'}</span></button><button className="ticket-check" aria-label={`${done ? 'Undo' : 'Complete'} ${habit.title} today`} aria-pressed={done} onClick={() => complete(habit, now)}>{done ? <Check size={30} strokeWidth={2} /> : <Plus size={30} strokeWidth={1.5} />}</button></div>{week && <div className="weekly-slots" aria-label={`${week.count} of ${week.target} days completed this week`}>{Array.from({ length: week.target }, (_, i) => <span key={i} className={i < week.count ? 'filled' : ''}>{i < week.count ? <Check size={13} /> : null}</span>)}</div>}<MiniHistory habit={habit} data={data} now={now} choose={select} /></article>;
+  return <article className={`habit-ticket ${done ? 'is-done' : ''} ${weekly ? 'is-weekly' : ''}`} style={{ '--habit-color': habit.color } as React.CSSProperties}>
+    <button type="button" className="ticket-main" aria-label={`${done ? 'Undo' : 'Complete'} ${habit.title} today`} aria-pressed={done} onClick={() => complete(habit, now)}>
+      <span className="ticket-name"><span className="ticket-number">Nº {String(index + 1).padStart(3, '0')} <Icon name={habit.icon} size={15} /></span><span className="ticket-title">{habit.title}</span><span className="ticket-context">{done ? 'Done today · tap to undo' : 'Tap to mark today'}{week ? ` · ${week.count}/${week.target} this week${week.partial ? ' · partial period' : ''}${week.state === 'completed' ? ' · goal reached' : ''}` : !done && schedule ? ` · ${scheduleLabel(schedule)}` : ''}</span></span>
+      <span className="ticket-check" aria-hidden="true">{done ? <Check size={30} strokeWidth={2} /> : <Plus size={30} strokeWidth={1.5} />}</span>
+    </button>
+    {week && <div className="weekly-slots" aria-label={`${week.count} of ${week.target} days completed this week`}>{Array.from({ length: week.target }, (_, i) => <span key={i} className={i < week.count ? 'filled' : ''}>{i < week.count ? <Check size={13} /> : null}</span>)}</div>}<MiniHistory habit={habit} data={data} now={now} choose={select} />
+  </article>;
 }
 
 function Progress({ data, now, selected, select, edit, correct }: { data: Snapshot; now: Day; selected: string | null; select: (id: string | null) => void; edit: (habit: Habit) => void; correct: (habit: Habit, day: Day) => void }) {

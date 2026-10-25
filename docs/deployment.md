@@ -47,3 +47,11 @@ The native save-and-deploy operation confirmed success and returned the live HTT
 Unauthenticated HEAD requests to `/`, `/manifest.webmanifest`, `/sw.js`, and `/icon-192.png` returned HTTP 401 with `Cache-Control: no-store`, consistent with the owner-private gate. This verifies HTTPS reachability and the gate, not the authenticated app resources or their cache headers. No authentication bypass was created or used.
 
 Physical installation, authenticated manifest/service-worker responses, hosted offline restart, and installed-app update persistence still need verification after sign-in on the actual phones. The existing local production tests remain the available evidence for those app flows.
+
+## Seven-stage upgrade
+
+The added Cosmic Moris (1,200 XP) and Moris the Infinite (2,000 XP) were privately published successfully. Source commit: `79049e835e127ae7419f7e489b68b38b098ea14d`. Deployment: `appgdep_6ade567f80388191af65c241383e9f7e`. Saved version: `appgprj_6ade4dba1b348191bf2a58c3d1540816~appgver_86e92d354af48191a48ab569b7cbc5b4`. The live URL and owner-private audience remain unchanged. The native receipt is `deployment-artifacts/evolution-deployment.json`. All 35 unit checks, the original 13 browser checks, three new evolution browser checks, and the production build passed. Existing thresholds, IndexedDB schema, and backup format were retained. Installed apps can apply the new service-worker version through the Save & update prompt.
+
+## Direct completion from Today
+
+The entire main habit area now completes or undoes today's entry, including taps on the habit name. A separate View history button opens the per-habit calendar. Daily and weekly habits share this interaction. The production build, 35 unit tests, 15 general browser checks, and three evolution browser checks pass. The browser suite verifies title/icon taps, keyboard activation, no completion navigation/date picker, the saved local date, history navigation, and no duplicate XP. Publication details are recorded in the ignored `deployment-artifacts/today-interaction-deployment.json` receipt after native deployment succeeds. Apply the update through Save & update on existing installations.
