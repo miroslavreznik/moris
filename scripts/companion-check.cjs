@@ -18,9 +18,8 @@ let browser;
   await page.clock.setFixedTime(new Date('2026-11-04T12:00:00+01:00'));
   await page.goto(base);
   await page.getByRole('button', { name: 'Choose your Moris', exact: true }).click();
-  assert.equal(await page.locator('.companion-presets button').count(), 3);
-  await page.locator('.companion-presets').screenshot({ path: path.join(output, 'moris-combinations.png') });
-  await page.getByRole('button', { name: 'Try Lagoon with Crooked antenna', exact: true }).click();
+  await page.getByRole('button', { name: 'Moris color: Lagoon', exact: true }).click();
+  await page.getByRole('button', { name: 'Moris detail: Crooked antenna', exact: true }).click();
   await page.getByRole('button', { name: 'Save my Moris', exact: true }).click();
   await page.locator('.welcome-heading .moris-art[data-color="lagoon"][data-detail="antenna"]').waitFor();
   for (const name of ['Read a few pages', 'Go for a walk', 'Phone-free morning']) await page.getByRole('checkbox', { name, exact: true }).check();
@@ -30,7 +29,7 @@ let browser;
   await page.locator('.today-moris .moris-art[data-color="lagoon"][data-detail="antenna"][data-motion="greet"]').waitFor();
   await page.getByRole('button', { name: 'Say hello to Moris', exact: true }).click();
   await page.getByText('0 XP', { exact: true }).first().waitFor();
-  console.log('PASS onboarding compares three combinations and preserves a chosen Moris; saying hello grants no XP');
+  console.log('PASS onboarding previews color and detail choices live and preserves a chosen Moris; saying hello grants no XP');
 
   for (const [name, motion] of [['Read a few pages', 'hop'], ['Go for a walk', 'wiggle'], ['Phone-free morning', 'spin']]) {
     await page.getByRole('button', { name: `Complete ${name} today`, exact: true }).click();

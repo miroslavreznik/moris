@@ -36,7 +36,7 @@ The production preview is normally at `http://localhost:4173`. The development s
 - Separate goal overviews, 35-day calendars, historical corrections, current/best streaks, and up to 12 weeks of quota history.
 - Prospective schedule revisions. A completed current day keeps its schedule; changes then start tomorrow or later. Partial first/changed weeks cannot become failed weekly streaks.
 - Seven original SVG evolution stages, derived XP, skippable transformation scenes, a next-evolution meter, optional interaction-triggered audio, and reduced-motion support.
-- A personal Moris: five colors and one of three little quirks, shared by every evolution, with comparison presets in onboarding and an editor in Moris/Settings. Appearance is included in backups; older data opens with the familiar orange color and freckles.
+- A personal Moris: five colors and one of three little quirks, shared by every evolution, with a live preview in onboarding and the Moris/Settings editor. Appearance is included in backups; older data opens with the familiar orange color and freckles.
 - A welcome reaction, quiet breathing/blinking, three completion reactions and a larger last-fixed-goal reaction. Saying hello to Moris is playful without changing XP.
 - IndexedDB via Dexie, a unique habit/date index, versioned schema, and transactional writes.
 - Versioned JSON export/import, record validation, a pre-restore download, and a safety backup stored atomically before replacement. Failed replacement rolls back.

@@ -6,8 +6,9 @@ November 4, 2026. Moris keeps its existing visual direction and remains a PWA.
 ## One Moris, yours
 
 The name is always Moris. Choose one of five colors (Tangerine, Moss, Lilac,
-Lagoon, Rose) and one detail (Freckles, Little tuft, Crooked antenna). Three
-starting combinations are shown side by side with real rendered previews.
+Lagoon, Rose) and one detail (Freckles, Little tuft, Crooked antenna). The single
+live preview above the controls shows each change immediately, without duplicate
+starting-combination cards.
 The selected color and single detail follow every evolution, including the
 Cosmic and Infinite forms. Previewing a combination does not save it until
 Save my Moris is selected. Choices remain freely editable in Moris or Settings.
@@ -67,7 +68,7 @@ simulated in the reminder regression suite.
 
 Unit coverage checks the new exact XP boundaries, preserved later milestones,
 old settings records, valid appearance backup round trips, legacy defaults and
-invalid imports. The companion browser suite checks comparison and selection in
+invalid imports. The companion browser suite checks live preview and selection in
 onboarding, greetings without XP, completion reaction variety, the first unlock
 at 3 wins, skipped transformation, all seven personalized forms, reload, 320 px
 layout, export/restore into another installation, offline launch and both motion
