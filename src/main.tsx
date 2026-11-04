@@ -9,6 +9,7 @@ import '@fontsource/ibm-plex-mono/latin-400.css';
 import App from './App';
 import './style.css';
 import './reminders.css';
+import './companion.css';
 import { boot } from './store';
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
 void boot();

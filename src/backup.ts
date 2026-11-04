@@ -1,3 +1,4 @@
+import { MORIS_COLORS, MORIS_DETAILS, appearanceOf } from './appearance';
 import { type Snapshot, type Schedule, type Habit, type Revision, type Completion, DEFAULT_SETTINGS, STAGES, serial, revisionAt, scheduled, activeOn } from './domain';
 export type Backup = Snapshot & { schemaVersion: 1; exportedAt: string };
 export function backupOf(state: Snapshot): Backup { return { ...state, schemaVersion: 1, exportedAt: new Date().toISOString() }; }
@@ -53,5 +54,8 @@ export function parseBackup(input: unknown): Snapshot {
     return { id: c.id, habitId: c.habitId, localDate: c.localDate, createdAt: c.createdAt, timeZone: c.timeZone };
   });
   if (!object(input.settings) || typeof input.settings.soundEnabled !== 'boolean' || typeof input.settings.animationsEnabled !== 'boolean') fail('settings are missing or invalid.');
-  return { habits, revisions, completions, settings: { ...DEFAULT_SETTINGS, soundEnabled: input.settings.soundEnabled, animationsEnabled: input.settings.animationsEnabled, celebratedStage: Number.isInteger(input.settings.celebratedStage) ? Math.min(STAGES.length - 1, Math.max(0, input.settings.celebratedStage as number)) : 0 }, onboardingComplete: true };
+  const settings = input.settings;
+  if (settings.morisColor !== undefined && !MORIS_COLORS.some(color => color.id === settings.morisColor)) fail('the Moris color is invalid.');
+  if (settings.morisDetail !== undefined && !MORIS_DETAILS.some(detail => detail.id === settings.morisDetail)) fail('the Moris detail is invalid.');
+  return { habits, revisions, completions, settings: { ...DEFAULT_SETTINGS, ...appearanceOf(input.settings as Parameters<typeof appearanceOf>[0]), soundEnabled: input.settings.soundEnabled, animationsEnabled: input.settings.animationsEnabled, celebratedStage: Number.isInteger(input.settings.celebratedStage) ? Math.min(STAGES.length - 1, Math.max(0, input.settings.celebratedStage as number)) : 0 }, onboardingComplete: true };
 }

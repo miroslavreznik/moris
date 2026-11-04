@@ -1,3 +1,5 @@
+import { DEFAULT_APPEARANCE, type Appearance } from './appearance';
+
 export type Day = string;
 export type Schedule =
   | { type: 'daily' }
@@ -7,16 +9,16 @@ export type Schedule =
 export type Habit = { id: string; title: string; icon: string; color: string; createdAt: string; startDate: Day; archivedAt?: string; archivedOn?: Day };
 export type Revision = { id: string; habitId: string; effectiveFrom: Day; schedule: Schedule };
 export type Completion = { id: string; habitId: string; localDate: Day; timeZone: string; createdAt: string };
-export type Settings = { soundEnabled: boolean; animationsEnabled: boolean; locale: 'en'; celebratedStage: number };
+export type Settings = Appearance & { soundEnabled: boolean; animationsEnabled: boolean; locale: 'en'; celebratedStage: number };
 export type Snapshot = { habits: Habit[]; revisions: Revision[]; completions: Completion[]; settings: Settings; onboardingComplete: boolean };
 export type DayState = 'completed' | 'due' | 'missed' | 'not_scheduled' | 'future';
-export const DEFAULT_SETTINGS: Settings = { soundEnabled: false, animationsEnabled: true, locale: 'en', celebratedStage: 0 };
+export const DEFAULT_SETTINGS: Settings = { ...DEFAULT_APPEARANCE, soundEnabled: false, animationsEnabled: true, locale: 'en', celebratedStage: 0 };
 export const EMPTY: Snapshot = { habits: [], revisions: [], completions: [], settings: DEFAULT_SETTINGS, onboardingComplete: false };
 export const STAGES = [
   { name: 'Proto-Moris', xp: 0, description: 'One cell. Several opinions. A tiny beginning with unreasonable potential.' },
-  { name: 'Finny Moris', xp: 50, description: 'New fins. No swimming lessons. Your little repetitions are making waves.' },
-  { name: 'Leggy Moris', xp: 150, description: 'A pair of legs and absolutely no coordination. Still moving forward.' },
-  { name: 'Primate-ish Moris', xp: 350, description: 'A little fluff. A lot of confidence. Definitely not a biology lesson.' },
+  { name: 'Finny Moris', xp: 30, description: 'New fins. No swimming lessons. Your little repetitions are making waves.' },
+  { name: 'Leggy Moris', xp: 100, description: 'A pair of legs and absolutely no coordination. Still moving forward.' },
+  { name: 'Primate-ish Moris', xp: 250, description: 'A little fluff. A lot of confidence. Definitely not a biology lesson.' },
   { name: 'Super Moris', xp: 700, description: 'A gloriously odd work in progress. There is always another little thing to do.' },
   { name: 'Cosmic Moris', xp: 1200, description: 'Outgrew the pond. Acquired an orbit. Still occasionally bumps into things.' },
   { name: 'Moris the Infinite', xp: 2000, description: 'Has transcended several dimensions. Still needs a little nudge to go for a walk.' },

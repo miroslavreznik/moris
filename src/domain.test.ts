@@ -75,8 +75,11 @@ describe('streaks and weekly quotas', () => {
   });
 });
 describe('completion and rewards', () => {
-  it('preserves the original forms and extends progression at the new boundaries', () => {
-    expect(STAGES.slice(0, 5).map(s => s.xp)).toEqual([0, 50, 150, 350, 700]);
+  it('brings early evolutions closer while preserving later milestones', () => {
+    expect(STAGES.map(s => s.xp)).toEqual([0, 30, 100, 250, 700, 1200, 2000]);
+    expect(stageOf(20)).toBe(0); expect(stageOf(30)).toBe(1);
+    expect(stageOf(90)).toBe(1); expect(stageOf(100)).toBe(2);
+    expect(stageOf(240)).toBe(2); expect(stageOf(250)).toBe(3);
     expect(stageOf(1190)).toBe(4);
     expect(STAGES[stageOf(1200)].name).toBe('Cosmic Moris');
     expect(stageOf(1990)).toBe(5);

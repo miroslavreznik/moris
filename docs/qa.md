@@ -1,5 +1,15 @@
 # Moris validation
 
+## Personal companion iteration, November 4, 2026
+
+- 50 automated checks pass, plus 29 browser checks (15 original, three late-evolution, six reminder and five companion scenarios).
+- Two further browser checks update the actual previously deployed PWA through Save & update, compare exact IndexedDB records before/after, and reopen the personalized upgraded app offline. No data reset or reinstall is used.
+- The first three evolution boundaries are verified at 30, 100 and 250 XP; later boundaries stay unchanged.
+- Personal color and single detail render across all seven forms and survive reload, offline launch, backup export and restore into another installation.
+- The three comparison presets, full editor and skippable evolution scene were visually inspected from real browser screenshots. The editor fits at 320 CSS px.
+- Browser checks verify distinct completion reactions, a last-goal reaction, hello without XP, and both reduced-motion settings. Existing habit, backup, offline, late-evolution and reminder checks also pass.
+- The old IndexedDB settings shape is covered explicitly. Neither the local schema nor the habit backup version changes. See `docs/companion-iteration.md` for the compatibility contract.
+
 ## Evening-reminder checks, November 4, 2026
 
 - TypeScript and the combined Vite/PWA plus Worker build pass.

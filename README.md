@@ -35,7 +35,9 @@ The production preview is normally at `http://localhost:4173`. The development s
 - Immediate one-tap completion, undo, a seven-day strip on Today, and local persistence.
 - Separate goal overviews, 35-day calendars, historical corrections, current/best streaks, and up to 12 weeks of quota history.
 - Prospective schedule revisions. A completed current day keeps its schedule; changes then start tomorrow or later. Partial first/changed weeks cannot become failed weekly streaks.
-- Seven original SVG evolution stages, derived XP, one-time skippable unlock celebrations, a next-evolution meter, optional interaction-triggered audio, and reduced-motion support.
+- Seven original SVG evolution stages, derived XP, skippable transformation scenes, a next-evolution meter, optional interaction-triggered audio, and reduced-motion support.
+- A personal Moris: five colors and one of three little quirks, shared by every evolution, with comparison presets in onboarding and an editor in Moris/Settings. Appearance is included in backups; older data opens with the familiar orange color and freckles.
+- A welcome reaction, quiet breathing/blinking, three completion reactions and a larger last-fixed-goal reaction. Saying hello to Moris is playful without changing XP.
 - IndexedDB via Dexie, a unique habit/date index, versioned schema, and transactional writes.
 - Versioned JSON export/import, record validation, a pre-restore download, and a safety backup stored atomically before replacement. Failed replacement rolls back.
 - PWA manifest, standard and maskable icons, Apple touch icon, locally bundled fonts, offline app shell, safe-area layout, and an explicit app-update prompt that waits for pending writes.
@@ -53,6 +55,7 @@ With the production preview running in a second terminal:
 npm run test:browser
 npm run test:evolution
 npm run test:reminders
+npm run test:companion
 ```
 
 The browser suite uses installed Microsoft Edge on Windows. Elsewhere install Playwright Chromium with `npx playwright install chromium`. `MORIS_TEST_URL` can override the preview address; `MORIS_BROWSER` can override the Windows browser channel.
@@ -79,4 +82,4 @@ Original specification: `Moris_PRD_MVP_PWA_EN.md`.
 
 ## More kinds of weird
 
-The original five thresholds stay at 0, 50, 150, 350, and 700 XP. Cosmic Moris adds a planetary ring and moon at 1,200 XP. Moris the Infinite adds cosmic arms, a double halo, and an infinity emblem at 2,000 XP. Earned XP carries straight into the extended progression; the IndexedDB schema and backup format remain unchanged. Backups retain celebration history for all seven forms.
+The early evolution thresholds are now 30, 100 and 250 XP: 3, 10 and 25 valid completions in total. Later milestones remain at 700, 1,200 and 2,000 XP. Each completion still earns 10 XP; no completion records, earned XP or later thresholds are rewritten. Cosmic Moris adds a planetary ring and moon, and Moris the Infinite adds cosmic arms, a double halo and an infinity emblem. All seven forms retain the selected body color and personal quirk. See `docs/companion-iteration.md` for the behavior and update contract.

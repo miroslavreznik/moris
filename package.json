@@ -11,7 +11,8 @@
     "typecheck": "tsc -b",
     "test:browser": "node scripts/browser-check.cjs",
     "test:evolution": "node scripts/evolution-check.cjs",
-    "test:reminders": "node scripts/reminder-check.cjs"
+    "test:reminders": "node scripts/reminder-check.cjs",
+    "test:companion": "node scripts/companion-check.cjs"
   },
   "dependencies": {
     "@block65/webcrypto-web-push": "2.0.0",

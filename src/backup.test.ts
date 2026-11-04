@@ -3,6 +3,22 @@ import { backupOf, parseBackup } from './backup';
 import { demoSnapshot, STAGES } from './domain';
 const sample = () => backupOf(demoSnapshot('2026-10-25'));
 describe('safe backup parsing', () => {
+  it('preserves a personal Moris across export and restore', () => {
+    const backup = sample();
+    backup.settings.morisColor = 'lagoon'; backup.settings.morisDetail = 'antenna';
+    expect(parseBackup(JSON.parse(JSON.stringify(backup))).settings).toMatchObject({ morisColor: 'lagoon', morisDetail: 'antenna' });
+  });
+  it('restores older backups with the original color and default quirk', () => {
+    const backup = JSON.parse(JSON.stringify(sample()));
+    delete backup.settings.morisColor; delete backup.settings.morisDetail;
+    expect(parseBackup(backup).settings).toMatchObject({ morisColor: 'tangerine', morisDetail: 'freckles' });
+  });
+  it('rejects invalid appearance values before touching records', () => {
+    const backup = JSON.parse(JSON.stringify(sample())); backup.settings.morisColor = 'unknown';
+    expect(() => parseBackup(backup)).toThrow('color');
+    backup.settings.morisColor = 'moss'; backup.settings.morisDetail = 'unknown';
+    expect(() => parseBackup(backup)).toThrow('detail');
+  });
   it('keeps celebrations for the added forms when restoring a backup', () => {
     const backup = sample();
     backup.settings.celebratedStage = 6;

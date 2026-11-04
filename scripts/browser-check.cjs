@@ -153,14 +153,15 @@ const waitReady = async page => { await page.evaluate(async () => { await naviga
   await restored.getByLabel('Start date', { exact: true }).fill(lastWeek);
   await restored.getByRole('dialog').getByRole('button', { name: 'Add habit', exact: true }).click();
   await restored.getByRole('button', { name: 'Complete A little practice today', exact: true }).click();
+  await restored.getByRole('heading', { name: 'A new kind of weird.', exact: true }).waitFor();
+  await restored.getByRole('button', { name: 'Keep showing up', exact: true }).click();
   await nav(restored, 'Progress');
   await restored.locator('.goal-overview').filter({ hasText: 'A little practice' }).click();
   for (let i = 0; i < 2; i++) {
     await restored.locator('.calendar-grid .missed').first().click();
     await restored.getByRole('button', { name: 'Mark as done', exact: true }).click();
   }
-  await restored.getByRole('heading', { name: 'A new kind of weird.', exact: true }).waitFor();
-  await restored.getByRole('button', { name: 'Keep showing up', exact: true }).click();
+  assert.equal(await restored.getByRole('dialog').count(), 0);
   const historical = restored.locator('.calendar-grid .completed').first();
   const historicalDate = await historical.getAttribute('aria-label');
   await historical.click(); await restored.getByRole('button', { name: 'Remove completion', exact: true }).click();

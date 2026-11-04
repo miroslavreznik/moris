@@ -85,3 +85,13 @@ simulated in browser QA; actual Android/iOS delivery still needs an opt-in test 
 the owner's phone. Apply the PWA update with Save & update, then enable reminders
 in Settings and use Send a test notification. No reinstall or data clearing is
 needed.
+
+## Personal companion and animation iteration, November 4, 2026
+
+The next iteration adds personal color/detail settings, more expressive creature
+reactions and a skippable transformation scene, plus early XP thresholds of
+30/100/250. Later thresholds, existing habit records, IndexedDB version, manifest
+ID, service-worker scope, push credentials, reminder database and the linked
+19:30 daily schedule are retained. The appearance defaults make existing records
+compatible without resetting storage. Source and publication receipts are kept
+in ignored `deployment-artifacts/companion-deployment.json` after success.

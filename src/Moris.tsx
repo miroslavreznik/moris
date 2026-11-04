@@ -1,4 +1,7 @@
 import { STAGES } from './domain';
+import { appearanceOf, MORIS_COLORS, MORIS_DETAILS, type Appearance } from './appearance';
+
+export type MorisMotion = 'still' | 'idle' | 'greet' | 'hop' | 'wiggle' | 'spin' | 'all-done';
 
 const appearances = [
   'an orange, wonderfully odd one-eyed creature',
@@ -10,18 +13,22 @@ const appearances = [
   'a golden orange creature with flowing cosmic arms, a double halo, and an infinity emblem',
 ];
 
-export function Moris({ stage = 0, happy = false, className = '' }: { stage?: number; happy?: boolean; className?: string }) {
+export function Moris({ stage = 0, happy = false, className = '', appearance, motion = 'still', motionKey = 0, decorative = false }: { stage?: number; happy?: boolean; className?: string; appearance?: Partial<Appearance>; motion?: MorisMotion; motionKey?: number; decorative?: boolean }) {
+  const selected = appearanceOf(appearance);
+  const palette = MORIS_COLORS.find(color => color.id === selected.morisColor)!;
+  const detail = MORIS_DETAILS.find(item => item.id === selected.morisDetail)!;
   const cosmic = stage === 5;
   const infinite = stage === 6;
-  return <svg className={`moris-art ${happy ? 'moris-happy' : ''} ${className}`} data-stage={stage} viewBox="0 0 200 200" role="img" aria-label={`${STAGES[stage].name}, ${appearances[stage]}`}>
+  return <svg className={`moris-art ${happy ? 'moris-happy' : ''} ${className}`} data-stage={stage} data-color={selected.morisColor} data-detail={selected.morisDetail} data-motion={motion} viewBox="0 0 200 200" role={decorative ? undefined : 'img'} aria-hidden={decorative || undefined} aria-label={decorative ? undefined : `${STAGES[stage].name}, ${palette.label} color, ${detail.label}, ${appearances[stage].replace(/orange,? /g, '')}`}>
+    <g className="moris-character" key={`${motion}-${motionKey}`}>
     {stage === 4 && <>
       <path d="M55 95 19 167 91 151 157 171 146 90Z" fill="#1839d5" />
       <path d="m75 29 1-20 18 12 12-17 10 20 20-6-7 24Z" fill="#d8ab3e" stroke="#142168" strokeWidth="3" strokeLinejoin="round" />
     </>}
     {stage >= 3 && stage <= 4 && <>
-      <path d="M51 75C9 37 11 121 49 106" fill="#b65331" stroke="#142168" strokeWidth="3" />
-      <path d="M146 71C190 30 189 119 150 109" fill="#b65331" stroke="#142168" strokeWidth="3" />
-      <path d="M36 72Q24 88 39 92M161 70Q178 88 162 95" fill="none" stroke="#f2b27f" strokeWidth="5" strokeLinecap="round" />
+      <path d="M51 75C9 37 11 121 49 106" fill={palette.shade} stroke="#142168" strokeWidth="3" />
+      <path d="M146 71C190 30 189 119 150 109" fill={palette.shade} stroke="#142168" strokeWidth="3" />
+      <path d="M36 72Q24 88 39 92M161 70Q178 88 162 95" fill="none" stroke={palette.highlight} strokeWidth="5" strokeLinecap="round" />
     </>}
     {stage >= 1 && stage <= 4 && <>
       <path d="m47 92-29-20 3 37 29 13M150 89l31-22-4 40-27 17" fill="#1839d5" stroke="#142168" strokeWidth="3" strokeLinejoin="round" />
@@ -47,13 +54,13 @@ export function Moris({ stage = 0, happy = false, className = '' }: { stage?: nu
       <path d="m36 33 7 10m-23 9 10 5m136-24-7 10m23 9-10 5M18 168l8-5m147 5 8 5" stroke="#d8ab3e" strokeWidth="3" strokeLinecap="round" />
       <ellipse cx="100" cy="188" rx="40" ry="5" fill="#d8ab3e33" />
     </>}
-    <path d="m92 30 17 18 24-14 3 25 29-3-10 26 23 17-22 16 12 28-29-2-8 27-24-16-21 17-11-26-28 7 4-28-26-11 21-21-13-23 28-1 5-27Z" fill={infinite ? '#ef9945' : '#eb6b36'} />
-    {stage >= 3 && stage <= 4 && <path d="m64 67 8-10 5 9 9-17 7 10 13-15 9 14 10-8 3 15" fill="none" stroke="#f7a36e" strokeWidth="4" strokeLinecap="round" />}
-    <ellipse cx="102" cy="91" rx="25" ry="32" fill="#f2efe4" stroke="#142168" strokeWidth="3" transform="rotate(-7 102 91)" />
+    <path className="moris-body" d="m92 30 17 18 24-14 3 25 29-3-10 26 23 17-22 16 12 28-29-2-8 27-24-16-21 17-11-26-28 7 4-28-26-11 21-21-13-23 28-1 5-27Z" fill={infinite ? palette.infinite : palette.body} />
+    {stage >= 3 && stage <= 4 && <path d="m64 67 8-10 5 9 9-17 7 10 13-15 9 14 10-8 3 15" fill="none" stroke={palette.highlight} strokeWidth="4" strokeLinecap="round" />}
+    <g className="moris-eye"><ellipse cx="102" cy="91" rx="25" ry="32" fill="#f2efe4" stroke="#142168" strokeWidth="3" transform="rotate(-7 102 91)" />
     {happy ? <path d="M91 94q11-16 22 0" fill="none" stroke="#142168" strokeWidth="7" strokeLinecap="round" /> : <ellipse cx="106" cy="98" rx="10" ry="17" fill="#142168" />}
-    {!happy && <ellipse cx="110" cy="91" rx="3" ry="5" fill="#f2efe4" />}
+    {!happy && <ellipse cx="110" cy="91" rx="3" ry="5" fill="#f2efe4" />}</g>
     <path d={happy ? 'M91 129q13 15 28-2' : 'M95 131q10 8 20-2'} fill="none" stroke="#142168" strokeWidth="3" strokeLinecap="round" />
-    {!cosmic && !infinite && <path d="m67 111 3 2m65-5 3-2" stroke="#b44c2c" strokeWidth="4" strokeLinecap="round" />}
+    {!cosmic && !infinite && <path d="m67 111 3 2m65-5 3-2" stroke={palette.shade} strokeWidth="4" strokeLinecap="round" />}
     {cosmic && <>
       <path d="m63 101 2 6 6 2-6 2-2 6-2-6-6-2 6-2Zm76-2 1 4 4 1-4 1-1 4-1-4-4-1 4-1Z" fill="#f2efe4" />
       <path d="M18 128c17 20 100-1 145-26" fill="none" stroke="#142168" strokeWidth="8" strokeLinecap="round" />
@@ -65,5 +72,11 @@ export function Moris({ stage = 0, happy = false, className = '' }: { stage?: nu
       <path d="m64 94 2 5 5 2-5 2-2 5-2-5-5-2 5-2Zm77 0 2 5 5 2-5 2-2 5-2-5-5-2 5-2Z" fill="#f2efe4" />
       <path d="m100 43 5 8-5 8-5-8Z" fill="#1839d5" />
     </>}
+    <g className="moris-personal-detail" data-personal-detail={selected.morisDetail}>
+      {selected.morisDetail === 'freckles' && <g fill="#142168" opacity=".7"><circle cx="62" cy="93" r="2.4" /><circle cx="71" cy="99" r="2.4" /><circle cx="60" cy="103" r="2.4" /></g>}
+      {selected.morisDetail === 'tuft' && <path d="M65 61C48 48 43 31 53 29c6-1 8 12 12 14-4-18 9-24 14-15 3 5-2 17-4 25" fill={palette.highlight} stroke="#142168" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />}
+      {selected.morisDetail === 'antenna' && <g><path d="m132 60 12-16-9-8 14-13" fill="none" stroke="#142168" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /><circle cx="150" cy="21" r="7" fill={palette.highlight} stroke="#142168" strokeWidth="3" /></g>}
+    </g>
+    </g>
   </svg>;
 }
