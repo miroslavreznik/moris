@@ -55,3 +55,33 @@ The added Cosmic Moris (1,200 XP) and Moris the Infinite (2,000 XP) were private
 ## Direct completion from Today
 
 The entire main habit area now completes or undoes today's entry, including taps on the habit name. A separate View history button opens the per-habit calendar. Daily and weekly habits share this interaction. The production build, 35 unit tests, 15 general browser checks, and three evolution browser checks pass. The browser suite verifies title/icon taps, keyboard activation, no completion navigation/date picker, the saved local date, history navigation, and no duplicate XP. Publication details are recorded in the ignored `deployment-artifacts/today-interaction-deployment.json` receipt after native deployment succeeds. Apply the update through Save & update on existing installations.
+
+## Browser push iteration, November 4, 2026
+
+This iteration preserves the original Site identity, owner-private audience, URL,
+PWA manifest ID, root service-worker scope, IndexedDB schema and habit backups.
+The source hosting manifest now declares a `DB` D1 binding and removes the static
+deployment declaration. The Worker embeds all browser assets and serves the
+original client plus same-origin reminder endpoints. Sites applies the appended
+`drizzle/0000_evening_reminders.sql` migration before deploying the Worker.
+
+The VAPID public key, secret private key and HTTPS subject are runtime environment
+variables stored through Sites. They are excluded from source and build output.
+The source allowlist now also includes the Worker, migration, reminder browser
+checks and `docs/reminders.md`, which contains the unattended sender instructions.
+The source helper remains responsible for committing, pushing and packaging the
+exact checked source state. Native publication and schedule receipts belong in
+ignored `deployment-artifacts/`; only a successful native result confirms release.
+
+Before attaching the daily 19:30 Europe/Budapest task, POST to the hosted
+`/api/reminders/dispatch` through the existing private Site's supported service
+access, then GET the same endpoint and match the run ID. A run outside the evening
+window deliberately persists a zero-send result, so readiness can be checked
+without notifying anyone. Keep credentials in memory, not files, logs or prompts.
+
+The local checks include 46 automated tests, all 15 original browser checks, three
+evolution checks and six reminder browser checks. Incoming push transport is
+simulated in browser QA; actual Android/iOS delivery still needs an opt-in test on
+the owner's phone. Apply the PWA update with Save & update, then enable reminders
+in Settings and use Send a test notification. No reinstall or data clearing is
+needed.

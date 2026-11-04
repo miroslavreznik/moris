@@ -5,14 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview --host 0.0.0.0",
+    "build": "tsc -b && vite build && node scripts/build-worker.mjs",
+    "preview": "node scripts/preview-worker.mjs",
     "test": "vitest run",
     "typecheck": "tsc -b",
     "test:browser": "node scripts/browser-check.cjs",
-    "test:evolution": "node scripts/evolution-check.cjs"
+    "test:evolution": "node scripts/evolution-check.cjs",
+    "test:reminders": "node scripts/reminder-check.cjs"
   },
   "dependencies": {
+    "@block65/webcrypto-web-push": "2.0.0",
     "@fontsource/barlow-condensed": "5.3.0",
     "@fontsource/dm-sans": "5.3.0",
     "@fontsource/ibm-plex-mono": "5.3.0",

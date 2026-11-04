@@ -1,0 +1,5 @@
+.evening-entry{margin-top:28px;max-width:100%}
+.evening-review section{margin:26px 0}.evening-review section h3{font:600 26px/1.1 var(--display);margin-bottom:14px}.evening-review>p,.evening-review .dialog-inner>p{line-height:1.7}
+.evening-list{list-style:none;padding:0;display:grid;gap:12px}.evening-list li{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.evening-list li>span{overflow-wrap:anywhere;min-width:0;flex:1}.evening-list small{font-size:11px;color:var(--muted)}
+.evening-actions{display:grid;gap:10px;margin-top:12px}.evening-actions button{justify-content:flex-start;text-align:left;overflow-wrap:anywhere}.reminder-settings .backup-actions{flex-wrap:wrap}.reminder-settings .form-error{margin-top:14px}.reminder-settings .small-note{margin-top:14px;overflow-wrap:anywhere}
+.reminder-details{margin-top:18px;font-size:12px;line-height:1.7}.reminder-details summary{cursor:pointer;min-height:44px;display:list-item;padding:12px 0}

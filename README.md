@@ -52,6 +52,7 @@ With the production preview running in a second terminal:
 ```sh
 npm run test:browser
 npm run test:evolution
+npm run test:reminders
 ```
 
 The browser suite uses installed Microsoft Edge on Windows. Elsewhere install Playwright Chromium with `npx playwright install chromium`. `MORIS_TEST_URL` can override the preview address; `MORIS_BROWSER` can override the Windows browser channel.
@@ -64,13 +65,13 @@ Browser artifacts are written to ignored `test-results/`. See `docs/qa.md` for v
 
 `src/storage.ts` declares IndexedDB version 1. Future database changes must add a version and migration, never delete the database during app updates. `src/store.ts` serializes writes while keeping UI feedback immediate. A storage failure reloads durable records and reports the failure.
 
-There is **no account, server, automatic cloud backup, sync, subscription, or external analytics**. Clearing browser data or losing the device can lose records. Export backups regularly; demo data is illustrative.
+Habits remain device-local, with **no habit account, automatic cloud backup, cross-device habit sync, paid subscription, or external analytics**. Opt-in browser push uses a small same-origin server storing delivery details and date/boolean eligibility only; see `docs/reminders.md`. Clearing browser data or losing the device can lose records. Export backups regularly; demo data is illustrative.
 
 ## Deployment and release boundary
 
 OpenAI Sites is the approved private hosting destination. See `docs/deployment.md` for the origin, exact source destination, package preparation, and release checks. Only a successful native deployment result confirms that a version is live.
 
-Deploy the contents of `dist/` at the **origin root over HTTPS**. Rewrite navigation requests to `index.html`; serve JavaScript, CSS, manifest, and icon requests as actual files. Do not cache `index.html` or `sw.js` indefinitely; hashed assets may use immutable caching. The manifest and service-worker scope are root-relative.
+The build now produces a Worker ESM entry at `dist/server/index.js` with embedded client assets and D1-backed reminder endpoints. Use the existing Sites source/deployment workflow with the `DB` binding and appended database migrations. Preserve the **same origin over HTTPS**, manifest ID, and service-worker scope. The Worker serves the client at the root and handles navigation fallback, content types, and cache headers. `npm run preview` exercises this production Worker with a separate temporary reminders database.
 
 Moris is privately deployed at https://moris-habit-club.miroslavreznik.chatgpt.site. Sign in with the owner’s ChatGPT account at the hosting gate. App data remains device-local. The full PRD definition of done still requires authenticated hosted-resource checks and physical iPhone/Safari and Android/Chrome installation, standalone launch, offline restart, and update checks. Browser emulation is not a substitute for that device validation.
 

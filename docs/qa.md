@@ -1,5 +1,14 @@
 # Moris validation
 
+## Evening-reminder checks, November 4, 2026
+
+- TypeScript and the combined Vite/PWA plus Worker build pass.
+- 46 domain, backup, IndexedDB, reminder-policy and SQLite-backed server checks pass.
+- The existing 15 browser checks and three evolution checks pass against the production Worker.
+- Six additional browser checks verify opt-in eligibility without habit names, offline completion resync, consciously closing a day without completion/XP, tomorrow planning, real system-notification display after closing the app tab, and opt-out/unsubscription.
+- The browser's incoming push event is simulated through Chromium DevTools; live push-service delivery to phones is not claimed. The backend tests generate real encrypted Web Push payloads and verify VAPID, aes128gcm and TTL headers.
+- A 320 px Settings screenshot was visually inspected. See `docs/reminders.md` for the hosted writer, schedule, privacy and device-validation boundaries.
+
 ## Verified locally, October 25, 2026
 
 - TypeScript checking and the production Vite/PWA build pass.
