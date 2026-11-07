@@ -45,7 +45,8 @@ async function bodyOf(request: Request) {
 }
 async function sendPush(env: Env, subscription: Subscription, test = false) {
   const payload = await buildPushPayload({ data: JSON.stringify({ title: test ? 'Hello from Moris.' : 'A little moment with Moris?', body: test ? 'Your system notifications are working. You can close Moris and still receive your evening reminder.' : 'Mark what you did today and take a look at tomorrow. There’s room for a fresh start.', test }), options: { ttl: test ? 60 : 1800 } }, subscription, { publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY, subject: env.VAPID_SUBJECT });
-  return fetch(subscription.endpoint, { ...payload, redirect: 'error' });
+  // Workers support manual/follow; never follow a push-provider redirect.
+  return fetch(subscription.endpoint, { ...payload, redirect: 'manual' });
 }
 
 export async function dispatchReminders(env: Env, now = new Date()) {

@@ -69,6 +69,7 @@ describe('web push reminder service', () => {
     expect(new Headers(options.headers).get('Authorization')).toMatch(/^vapid /);
     expect(new Headers(options.headers).get('TTL')).toBe('1800');
     expect(new Headers(options.headers).get('Content-Encoding')).toBe('aes128gcm');
+    expect(options.redirect).toBe('manual');
     expect((options.body as Uint8Array).byteLength).toBeGreaterThan(100);
     expect((await dispatchReminders(env, date)).sent).toBe(0);
   });

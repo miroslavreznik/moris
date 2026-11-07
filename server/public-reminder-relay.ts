@@ -42,14 +42,20 @@ export default {
       const backend = new URL(env.MORIS_BACKEND_ORIGIN);
       if (backend.protocol !== 'https:' || backend.pathname !== '/' || backend.search || backend.hash || backend.username || backend.password) throw new Error('Invalid backend origin');
       const response = await fetch(new URL(path, backend), {
-        method, redirect: 'error', headers: {
+        method, redirect: 'manual', headers: {
           'Content-Type': 'application/json',
           'OAI-Sites-Authorization': `Bearer ${env.MORIS_SERVICE_TOKEN}`,
           'x-moris-public-client': '1',
         }, ...(body ? { body } : {}),
       });
-      if (!response.headers.get('Content-Type')?.includes('application/json')) throw new Error('Backend unavailable');
+      if (!response.headers.get('Content-Type')?.includes('application/json')) {
+        console.error('Moris reminder upstream returned a non-JSON response', response.status, response.headers.get('Content-Type'));
+        throw new Error('Backend unavailable');
+      }
       return new Response(response.body, { status: response.status, headers: { ...Object.fromEntries(headers), 'Content-Type': 'application/json' } });
-    } catch { return reply({ error: 'Reminders are temporarily unavailable. Your habits are safe on this device.' }, 503); }
+    } catch (error) {
+      console.error('Moris reminder upstream unavailable', error instanceof Error ? error.message : 'Unknown upstream error');
+      return reply({ error: 'Reminders are temporarily unavailable. Your habits are safe on this device.' }, 503);
+    }
   },
 };

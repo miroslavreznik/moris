@@ -188,8 +188,9 @@ const waitReady = async page => { await page.evaluate(async () => { await naviga
   ok('reduced motion keeps completion visible and disables the creature animation');
   await realContext.setOffline(false);
   const manifestResponse = await page.request.get(`${base}/manifest.webmanifest`); const manifest = await manifestResponse.json();
-  assert.equal(manifest.display, 'standalone'); assert.equal(manifest.start_url, '/');
-  for (const icon of manifest.icons) { const response = await page.request.get(base + icon.src); assert.equal(response.status(), 200); assert.ok((await response.body()).length > 100); }
+  const scope = new URL(base).pathname.replace(/\/?$/, '/');
+  assert.equal(manifest.display, 'standalone'); assert.equal(manifest.start_url, scope); assert.equal(manifest.scope, scope);
+  for (const icon of manifest.icons) { const response = await page.request.get(new URL(icon.src, base).href); assert.equal(response.status(), 200); assert.ok((await response.body()).length > 100); }
   assert.ok(manifest.icons.some(i => i.purpose === 'maskable'));
   ok('install manifest and all standard/maskable icons are served');
   const midnightContext = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Europe/Budapest', acceptDownloads: true });

@@ -31,6 +31,15 @@ Moving addresses needs a one-time export/restore and new notification opt-in.
 Turning off old reminders avoids notifications from two separate installations.
 Physical Android/iOS push transport remains a phone-level check.
 
+Release verification passed on the public Pages URL: 54 unit checks, all 15
+general browser scenarios, six reminder browser scenarios, and public API checks
+for CORS, dispatch isolation, body limits, anonymous device registration, token
+isolation, opt-out and stale writes. The browser notification check delivers a
+simulated push event to the real service worker with the app tab closed; it does
+not prove phone delivery. A hosted-only failure also exposed Workers' rejection
+of `fetch` with `redirect: 'error'`; the relay and push sender now use `manual`,
+never follow redirects, and treat non-success provider responses as failures.
+
 ## Original installation and history
 
 Status: privately deployed over HTTPS on October 25, 2026. The native Sites deployment returned succeeded. Authenticated hosted-app checks and physical-device tests remain pending sign-in/device access.

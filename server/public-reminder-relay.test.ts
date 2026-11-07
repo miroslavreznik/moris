@@ -19,7 +19,7 @@ describe('public notification relay', () => {
     expect(headers.get('oai-authenticated-user-id')).toBeNull();
     expect(headers.get('Origin')).toBeNull();
     expect(headers.get('x-moris-public-client')).toBe('1');
-    expect(options.redirect).toBe('error');
+    expect(options.redirect).toBe('manual');
     expect(new TextDecoder().decode(options.body as ArrayBuffer)).toBe('{"id":"device"}');
     expect(await response.text()).not.toContain(env.MORIS_SERVICE_TOKEN);
   });

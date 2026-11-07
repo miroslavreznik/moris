@@ -64,6 +64,8 @@ npm run test:companion
 
 The browser suite uses installed Microsoft Edge on Windows. Elsewhere install Playwright Chromium with `npx playwright install chromium`. `MORIS_TEST_URL` can override the preview address; `MORIS_BROWSER` can override the Windows browser channel.
 
+`npm run test:public-api` checks the deployed notification relay, including anonymous installation isolation and opt-out. It leaves its synthetic test installation disabled and sends no push. To check the published app, set `MORIS_TEST_URL=https://miroslavreznik.github.io/moris` before running the browser and reminder suites.
+
 Browser artifacts are written to ignored `test-results/`. See `docs/qa.md` for validation evidence and the remaining physical-device/release checks.
 
 ## Data and scheduling

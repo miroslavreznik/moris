@@ -12,7 +12,7 @@ const keyBytes = (value: string) => Uint8Array.from(atob(value.replace(/-/g, '+'
 const randomToken = () => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 async function post(path: string, body: unknown) {
   const response = await fetch(`${api}${path}`, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), cache: 'no-store', keepalive: true });
-  if (response.status === 401) throw new Error('Open Moris online and sign in again to sync reminders.');
+  if (response.status === 401) throw new Error('The reminder service is unavailable. Please try again when you are online.');
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result.error || 'Reminders could not sync. They will retry when you are online.');
 }
@@ -67,7 +67,7 @@ export function useReminders(data: Snapshot, loaded: boolean, pending: number) {
     if (isDemo || !supported() || !online) return;
     const controller = new AbortController();
     void fetch(`${api}config`, { cache: 'no-store', signal: controller.signal }).then(async response => {
-      if (!response.ok) throw new Error('The reminder service is unavailable. Open Moris online and sign in if needed.');
+      if (!response.ok) throw new Error('The reminder service is unavailable. Please try again when you are online.');
       const result: Config = await response.json();
       if (!result.ready || !result.publicKey) throw new Error('Evening reminders are not available yet.');
       setConfig(result);

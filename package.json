@@ -13,6 +13,7 @@
     "test:browser": "node scripts/browser-check.cjs",
     "test:evolution": "node scripts/evolution-check.cjs",
     "test:reminders": "node scripts/reminder-check.cjs",
+    "test:public-api": "node scripts/public-api-check.mjs",
     "test:companion": "node scripts/companion-check.cjs"
   },
   "dependencies": {
