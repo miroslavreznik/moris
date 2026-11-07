@@ -6,3 +6,16 @@ test-results/
 *.local
 sites/
 deployment-artifacts/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+.wrangler/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+moris-backup*.json
+moris-before-restore*.json

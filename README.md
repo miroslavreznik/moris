@@ -8,6 +8,8 @@ The working visual direction is **Sunday Club**, combined with **Oddly Good's re
 
 Tested with Node 22.14.0 and npm 10.9.2.
 
+For cloning on another computer, saving changes to GitHub, and inviting collaborators, see [Remote work and sharing](docs/remote-work.md) (Czech). The project root is the working source; `sites/moris` is an ignored deployment copy.
+
 ```sh
 npm ci
 npm run dev
