@@ -5,6 +5,36 @@ system Notifications API, with a small same-origin Sites Worker and D1 database.
 The existing IndexedDB database, origin, manifest ID, service-worker scope,
 habit records, XP and backup format are preserved.
 
+## GitHub Pages installation, November 7, 2026
+
+The public app at `https://miroslavreznik.github.io/moris/` uses
+`https://moris-reminders.miroslavreznik.chatgpt.site/api/reminders/` for its
+notification API. The separate public relay forwards only `GET config`,
+`POST subscription` and `POST test` to the original **private** Sites service.
+It bounds bodies, strips all caller cookies/identity/authorization headers,
+rejects other origins, and never forwards dispatch or arbitrary paths.
+
+The relay's `MORIS_SERVICE_TOKEN` is the existing supported service credential
+returned by the original Site's `get_site`. It is stored only as a secret in the
+relay's runtime, along with `MORIS_BACKEND_ORIGIN` and `MORIS_PUBLIC_ORIGIN`.
+If the original service credential is revoked, refresh this runtime secret from
+`get_site` and redeploy the relay; never put it in the Pages build or repository.
+
+The private backend recognizes the relay's `x-moris-public-client: 1` marker only
+on identity-less requests already admitted by the unchanged private Sites gate.
+Public devices are controlled by their random installation token, stored hashed
+on the server; no ChatGPT sign-in is required for the public app. Public device
+registration is capped at the sender's 1,000-installation capacity. The existing
+19:30 Europe/Budapest sender, D1 database and VAPID keys remain in place.
+The original authenticated installation still works under its existing identity.
+
+GitHub Pages uses `/moris/` as its manifest ID, start URL and service-worker scope.
+Notification icons and click targets follow that scope, so other projects on the
+same `github.io` origin are not opened by a Moris notification. Export/restore
+transfers habits, XP and appearance to the new origin; notification permissions
+must be enabled separately. Turn off the old installation's reminders if retiring
+it. Neither backup files nor device control tokens are published with the code.
+
 ## Behavior
 
 - Enable explicitly in Settings; never request permission on launch.

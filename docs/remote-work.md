@@ -1,10 +1,12 @@
 # Moris: práce na dálku a sdílení
 
-Soukromý repozitář: https://github.com/miroslavreznik/moris
+Veřejný repozitář: https://github.com/miroslavreznik/moris
+
+Veřejná aplikace: https://miroslavreznik.github.io/moris/
 
 ## Na druhém počítači
 
-Nainstaluj Git a Node.js 22.14.0 (verze je také v `.nvmrc`). Přihlas se na GitHub účtem, který má přístup k repozitáři. Potom v terminálu:
+Nainstaluj Git a Node.js 22.14.0 (verze je také v `.nvmrc`). Pro stažení veřejného kódu není potřeba přihlášení. Potom v terminálu:
 
 ```sh
 git clone https://github.com/miroslavreznik/moris.git
@@ -44,7 +46,7 @@ Pro ověření produkční PWA spusť `npm run build` a `npm run preview`. V dal
 
 ## Přístup dalšího člověka
 
-Repozitář zůstává soukromý. Na GitHubu otevři **Settings → Collaborators → Add people**, vyber konkrétní GitHub účet a pošli pozvánku. Pozvaný člověk ji musí přijmout; potom může projekt naklonovat stejným postupem. Změny si posílejte přes větve a pull requesty.
+Repozitář je veřejný. Pro společné úpravy na GitHubu otevři **Settings → Collaborators → Add people**, vyber konkrétní GitHub účet a pošli pozvánku. Pozvánka přidává právo zapisovat; pro čtení a klonování není potřeba. Změny si posílejte přes větve a pull requesty.
 
 Přístup ke zdrojovému kódu a přístup k nasazené aplikaci jsou oddělené. Pozvánka do repozitáře sama neotevře soukromou aplikaci na Sites.
 
@@ -54,4 +56,6 @@ GitHub přenáší kód, dokumentaci a historii vývoje. Osobní návyky, histor
 
 `npm run preview` používá dočasnou databázi připomínek a čerstvé místní testovací klíče; nevyžaduje produkční tajné údaje. Produkční VAPID klíče zůstávají v runtime prostředí Sites a do Gitu nepatří.
 
-Push do GitHubu automaticky nenasazuje aplikaci. Produkční nasazení dál používá existující Sites projekt a jeho původní URL podle `docs/deployment.md`. `node scripts/prepare-hosting.mjs` připraví kopii zdrojů pro tento postup. Zachovej projekt ID, databázi, runtime klíče a původní adresu, aby zůstala dostupná stávající data a připomínky.
+Push do `main` automaticky sestaví a nasadí veřejnou aplikaci přes GitHub Actions. Veřejný web používá adresář `/moris/` a oddělenou službu pro připomínky. Změny serveru se nadále nasazují přes Sites podle `docs/deployment.md`; GitHub Pages neumí server spustit. `node scripts/prepare-hosting.mjs` připraví původní soukromou službu a `node scripts/prepare-reminder-relay.mjs` samostatné veřejné propojení. Zachovej projekt ID, databázi, runtime klíče a původní adresu.
+
+Přechod na GitHub Pages: ve starém Morisu exportuj zálohu v Settings, na nové adrese ji obnov a znovu zapni notifikace. Pokud starou instalaci přestaneš používat, vypni v ní připomínky, aby nechodily z obou instalací.

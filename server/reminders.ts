@@ -78,17 +78,20 @@ export async function dispatchReminders(env: Env, now = new Date()) {
 export async function reminderAPI(request: Request, env: Env): Promise<Response> {
   const path = new URL(request.url).pathname;
   const owner = request.headers.get('oai-authenticated-user-id');
+  // Only the private Sites service gate can admit an identity-less relay.
+  // This marker is never a substitute for that gate or a device's secret token.
+  const publicClient = !owner && request.headers.get('x-moris-public-client') === '1';
   const origin = request.headers.get('Origin');
   if (origin && origin !== new URL(request.url).origin) return json({ error: 'Use Moris to change reminders.' }, 403);
   if (path === '/api/reminders/dispatch') {
     // The unchanged owner-private Sites gate authenticates the unattended caller.
     // A signed-in browser visitor cannot invoke the shared dispatch operation.
-    if (owner || origin) return json({ error: 'Service access required.' }, 403);
+    if (owner || origin || publicClient) return json({ error: 'Service access required.' }, 403);
     if (request.method === 'GET') return json(await env.DB.prepare('SELECT * FROM reminder_runs ORDER BY started_at DESC LIMIT 1').first());
     if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
     return json(await dispatchReminders(env));
   }
-  if (!owner) return json({ error: 'Sign in to Moris to manage reminders.' }, 401);
+  if (!owner && !publicClient) return json({ error: 'Sign in to Moris to manage reminders.' }, 401);
   if (path === '/api/reminders/config' && request.method === 'GET') return json({ ready: !!env.DB && !!env.VAPID_PUBLIC_KEY && !!env.VAPID_PRIVATE_KEY, publicKey: env.VAPID_PUBLIC_KEY, time: REMINDER_TIME, timeZone: REMINDER_ZONE });
   if (!['/api/reminders/subscription', '/api/reminders/test'].includes(path)) return json({ error: 'Not found.' }, 404);
   if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
@@ -96,7 +99,7 @@ export async function reminderAPI(request: Request, env: Env): Promise<Response>
     const body = await bodyOf(request);
     const tokenHash = await hash(body.token as string);
     const existing = await env.DB.prepare('SELECT * FROM reminder_devices WHERE id = ?').bind(body.id).first<Device>();
-    if (existing && (existing.owner !== owner || existing.token_hash !== tokenHash)) return json({ error: 'This reminder belongs to a different installation.' }, 403);
+    if (existing && ((!publicClient && existing.owner !== owner) || existing.token_hash !== tokenHash)) return json({ error: 'This reminder belongs to a different installation.' }, 403);
     if (path.endsWith('/test')) {
       if (!existing?.enabled) return json({ error: 'Enable reminders first.' }, 409);
       const time = Date.now();
@@ -115,9 +118,14 @@ export async function reminderAPI(request: Request, env: Env): Promise<Response>
     if (existing) {
       await env.DB.prepare('UPDATE reminder_devices SET subscription = ?, days = ?, version = ?, enabled = 1 WHERE id = ? AND version <= ?').bind(JSON.stringify(subscription), JSON.stringify(days), body.version, body.id, body.version).run();
     } else {
-      const count = await env.DB.prepare('SELECT COUNT(*) AS count FROM reminder_devices WHERE owner = ?').bind(owner).first<{ count: number }>();
+      const deviceOwner = publicClient ? `public:${body.id}` : owner!;
+      if (publicClient) {
+        const total = await env.DB.prepare('SELECT COUNT(*) AS count FROM reminder_devices').first<{ count: number }>();
+        if ((total?.count ?? 0) >= 1000) return json({ error: 'The reminder service is full. Please contact the Moris owner.' }, 429);
+      }
+      const count = await env.DB.prepare('SELECT COUNT(*) AS count FROM reminder_devices WHERE owner = ?').bind(deviceOwner).first<{ count: number }>();
       if ((count?.count ?? 0) >= 20) return json({ error: 'Too many reminder installations. Please contact the Moris owner.' }, 429);
-      await env.DB.prepare('INSERT INTO reminder_devices (id, owner, token_hash, subscription, days, version, enabled, last_test_at) VALUES (?, ?, ?, ?, ?, ?, 1, 0)').bind(body.id, owner, tokenHash, JSON.stringify(subscription), JSON.stringify(days), body.version).run();
+      await env.DB.prepare('INSERT INTO reminder_devices (id, owner, token_hash, subscription, days, version, enabled, last_test_at) VALUES (?, ?, ?, ?, ?, ?, 1, 0)').bind(body.id, deviceOwner, tokenHash, JSON.stringify(subscription), JSON.stringify(days), body.version).run();
     }
     return json({ synced: true });
   } catch (error) {

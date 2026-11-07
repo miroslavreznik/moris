@@ -2,6 +2,8 @@
 
 Every repetition changes you. A mobile-first, local-first habit PWA with an original evolving companion.
 
+Public app: **https://miroslavreznik.github.io/moris/**. GitHub Actions builds and publishes `main`. The repository is public; personal habits and backups are not part of it.
+
 The working visual direction is **Sunday Club**, combined with **Oddly Good's readable progress grids**. Each habit has its own progress view; weekly quotas use calendar weeks rather than invented daily streaks.
 
 ## Run locally
@@ -74,11 +76,13 @@ Habits remain device-local, with **no habit account, automatic cloud backup, cro
 
 ## Deployment and release boundary
 
-OpenAI Sites is the approved private hosting destination. See `docs/deployment.md` for the origin, exact source destination, package preparation, and release checks. Only a successful native deployment result confirms that a version is live.
+The public app uses GitHub Pages at `/moris/`. `npm run build:pages` produces only browser assets; set `MORIS_BASE_PATH=/moris/` and `VITE_REMINDERS_API_URL` to the public notification relay when building this edition. The workflow is `.github/workflows/pages.yml`.
+
+The existing OpenAI Sites installation remains private and retains the reminder database, VAPID keys and daily sender. A separate public Sites relay forwards only notification configuration, device subscription and test requests. Its service credential is a server-side runtime secret, absent from GitHub and browser bundles. The relay exposes no dispatch endpoint. See `docs/deployment.md` and `docs/reminders.md`.
 
 The build now produces a Worker ESM entry at `dist/server/index.js` with embedded client assets and D1-backed reminder endpoints. Use the existing Sites source/deployment workflow with the `DB` binding and appended database migrations. Preserve the **same origin over HTTPS**, manifest ID, and service-worker scope. The Worker serves the client at the root and handles navigation fallback, content types, and cache headers. `npm run preview` exercises this production Worker with a separate temporary reminders database.
 
-Moris is privately deployed at https://moris-habit-club.miroslavreznik.chatgpt.site. Sign in with the owner’s ChatGPT account at the hosting gate. App data remains device-local. The full PRD definition of done still requires authenticated hosted-resource checks and physical iPhone/Safari and Android/Chrome installation, standalone launch, offline restart, and update checks. Browser emulation is not a substitute for that device validation.
+The original installation is at https://moris-habit-club.miroslavreznik.chatgpt.site and still requires the owner's ChatGPT sign-in. To move to GitHub Pages, export a backup in the original installation's Settings, restore it at the new address, and enable notifications there. Browser storage and notification permissions are separate for each origin. Turn off reminders in the original installation if you stop using it, to avoid receiving reminders from both installations. Physical phone delivery and installation checks remain device tests; browser emulation is not a substitute.
 
 Original specification: `Moris_PRD_MVP_PWA_EN.md`.
 

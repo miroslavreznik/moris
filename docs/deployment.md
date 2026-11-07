@@ -1,5 +1,38 @@
 # Moris HTTPS deployment
 
+## Public GitHub Pages, November 7, 2026
+
+The user authorized making `miroslavreznik/moris` public and publishing the app
+at `https://miroslavreznik.github.io/moris/`. `.github/workflows/pages.yml`
+tests and builds `main`, uploads only the browser `dist` output and deploys it
+through GitHub Pages. `npm run build:pages` does not include the private Worker.
+The build sets `MORIS_BASE_PATH=/moris/` and a public notification API URL.
+The repository contains source code, not personal habits, exported backups or
+runtime credentials. Source publication does not publish IndexedDB records.
+
+The original Site below remains owner-private, retaining its D1 data, VAPID keys
+and existing cloud sender. Its updated API accepts token-controlled public
+installations only through supported private service access. The public relay
+is a separate Site, `appgprj_6aef8a9554d481919e155b6a5dcdf7bc`, at
+`https://moris-reminders.miroslavreznik.chatgpt.site`. Its local source copy is
+`sites/moris-reminders-relay`; prepare it with
+`node scripts/prepare-reminder-relay.mjs`. It holds the private backend's existing
+service credential only as a runtime secret. It exposes only config, subscription
+and test, with CORS restricted to `https://miroslavreznik.github.io`.
+It has no database and no independent sender or schedule.
+
+The original Site's audience must stay private because it protects dispatch.
+Publish the relay first privately, verify it, then make that separate relay
+public. Verify Pages HTML/assets, manifest scope, service worker, offline reopen,
+public API preflight and device-token isolation. Record exact deployment receipts
+in ignored `deployment-artifacts/github-pages-deployment.json`.
+
+Moving addresses needs a one-time export/restore and new notification opt-in.
+Turning off old reminders avoids notifications from two separate installations.
+Physical Android/iOS push transport remains a phone-level check.
+
+## Original installation and history
+
 Status: privately deployed over HTTPS on October 25, 2026. The native Sites deployment returned succeeded. Authenticated hosted-app checks and physical-device tests remain pending sign-in/device access.
 
 ## Selected destination

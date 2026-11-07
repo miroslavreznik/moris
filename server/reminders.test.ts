@@ -44,6 +44,22 @@ describe('web push reminder service', () => {
     expect((await register({}, 'someone-else')).status).toBe(403);
     expect((await register({ token: 'b'.repeat(43) })).status).toBe(403);
   });
+  it('supports token-isolated public installations only behind the private service gate', async () => {
+    const anonymous = (path: string, body: unknown) => {
+      const value = request(path, body, null);
+      value.headers.set('x-moris-public-client', '1');
+      return value;
+    };
+    const body = { id, token, enabled: true, version: 1, subscription, days: days() };
+    expect((await reminderAPI(request('subscription', body, null), env)).status).toBe(401);
+    expect((await reminderAPI(anonymous('subscription', body), env)).status).toBe(200);
+    expect(database.prepare('SELECT owner FROM reminder_devices').get()?.owner).toBe(`public:${id}`);
+    expect((await reminderAPI(anonymous('subscription', { ...body, token: 'b'.repeat(43) }), env)).status).toBe(403);
+    expect((await reminderAPI(anonymous('test', { id, token }), env)).status).toBe(200);
+    expect((await reminderAPI(anonymous('dispatch', {}), env)).status).toBe(403);
+    expect((await reminderAPI(anonymous('subscription', { id, token, enabled: false, version: 2 }), env)).status).toBe(200);
+    expect(database.prepare('SELECT enabled FROM reminder_devices').get()?.enabled).toBe(0);
+  });
   it('sends one encrypted notification despite concurrent dispatch and retries', async () => {
     await register();
     const results = await Promise.all([dispatchReminders(env, date), dispatchReminders(env, date)]);
