@@ -3,3 +3,17 @@
 .evening-list{list-style:none;padding:0;display:grid;gap:12px}.evening-list li{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.evening-list li>span{overflow-wrap:anywhere;min-width:0;flex:1}.evening-list small{font-size:11px;color:var(--muted)}
 .evening-actions{display:grid;gap:10px;margin-top:12px}.evening-actions button{justify-content:flex-start;text-align:left;overflow-wrap:anywhere}.reminder-settings .backup-actions{flex-wrap:wrap}.reminder-settings .form-error{margin-top:14px}.reminder-settings .small-note{margin-top:14px;overflow-wrap:anywhere}
 .reminder-details{margin-top:18px;font-size:12px;line-height:1.7}.reminder-details summary{cursor:pointer;min-height:44px;display:list-item;padding:12px 0}
+
+.today-plans, .plans-progress { margin-top: 28px; }
+.evening-actions button[aria-pressed=true], .plan-check[aria-pressed=true] { background: var(--faint); }
+.evening-actions button small, .plan-check small { color: var(--muted); }
+.plan-form { margin-top: 12px; }
+.plan-form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.plans-progress { border: 1px solid var(--line); padding: 0 16px; }
+.plans-progress summary { cursor: pointer; padding: 12px 0; font: 600 24px/1.2 var(--display); }
+.plans-progress summary small { display: block; padding: 4px 0 0 16px; color: var(--muted); font: 11px/1.5 var(--mono); }
+.plan-history { list-style: none; margin: 0; padding: 0 0 12px; }
+.plan-history li { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; gap: 4px 12px; border-top: 1px solid var(--line); padding: 10px 0; }
+.plan-history time { grid-column: 1 / -1; color: var(--muted); font: 11px/1.5 var(--mono); }
+.plan-history span { overflow-wrap: anywhere; }
+.plan-history .plan-check { justify-content: flex-start; text-align: left; }

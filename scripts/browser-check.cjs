@@ -110,7 +110,7 @@ const waitReady = async page => { await page.evaluate(async () => { await naviga
   const download = await downloadPromise;
   const backupPath = path.join(output, 'backup.json'); await download.saveAs(backupPath);
   const backupBytes = await readFile(backupPath), backup = JSON.parse(backupBytes);
-  assert.equal(backup.schemaVersion, 1); assert.equal(backup.completions.length, 1); assert.equal(backup.habits.length, 3);
+  assert.equal(backup.schemaVersion, 2); assert.deepEqual(backup.plans, []); assert.equal(backup.completions.length, 1); assert.equal(backup.habits.length, 3);
   const localToday = await page.evaluate(() => { const day = new Date(); return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`; });
   assert.equal(backup.completions[0].localDate, localToday);
   const bad = structuredClone(backup); bad.completions[0].habitId = 'orphan';

@@ -9,9 +9,11 @@ describe('safe backup parsing', () => {
     expect(parseBackup(JSON.parse(JSON.stringify(backup))).settings).toMatchObject({ morisColor: 'lagoon', morisDetail: 'antenna' });
   });
   it('restores older backups with the original color and default quirk', () => {
-    const backup = JSON.parse(JSON.stringify(sample()));
-    delete backup.settings.morisColor; delete backup.settings.morisDetail;
-    expect(parseBackup(backup).settings).toMatchObject({ morisColor: 'tangerine', morisDetail: 'freckles' });
+    const backup = JSON.parse(JSON.stringify({ ...sample(), schemaVersion: 1 }));
+    delete backup.settings.morisColor; delete backup.settings.morisDetail; delete backup.plans;
+    const restored = parseBackup(backup);
+    expect(restored.settings).toMatchObject({ morisColor: 'tangerine', morisDetail: 'freckles' });
+    expect(restored.plans).toEqual([]);
   });
   it('rejects invalid appearance values before touching records', () => {
     const backup = JSON.parse(JSON.stringify(sample())); backup.settings.morisColor = 'unknown';
@@ -34,9 +36,28 @@ describe('safe backup parsing', () => {
     expect(restored.habits).toEqual(backup.habits);
   });
   it('round-trips all local records and their dates', () => {
-    const backup = sample(); expect(parseBackup(JSON.parse(JSON.stringify(backup)))).toEqual(demoSnapshot('2026-10-25'));
+    const state = {
+      ...demoSnapshot('2026-10-25'),
+      plans: [
+        { id: 'one', title: 'Meet a friend', date: '2026-10-24', completed: true },
+        { id: 'two', title: 'Visit the museum', date: '2026-10-29', completed: false },
+      ],
+    };
+    expect(parseBackup(JSON.parse(JSON.stringify(backupOf(state))))).toEqual(state);
   });
-  it('rejects unsupported versions before changing anything', () => { expect(() => parseBackup({ ...sample(), schemaVersion: 2 })).toThrow('version'); });
+  it('rejects unsupported versions before changing anything', () => { expect(() => parseBackup({ ...sample(), schemaVersion: 3 })).toThrow('version'); });
+  it('rejects a current backup without a plans array', () => {
+    expect(() => parseBackup({ ...sample(), plans: undefined })).toThrow('plan records');
+  });
+  it('rejects invalid or duplicate plan records', () => {
+    const plan = { id: 'one', title: 'Meet a friend', date: '2026-10-25', completed: false };
+    for (const plans of [
+      [{ ...plan, title: ' ' }],
+      [{ ...plan, date: '2026-02-30' }],
+      [{ ...plan, completed: 'false' }],
+      [plan, { ...plan, date: '2026-10-26' }],
+    ]) expect(() => parseBackup({ ...sample(), plans })).toThrow('plan is invalid or duplicated');
+  });
   it('rejects orphaned completions', () => { const backup = sample(); backup.completions[0].habitId = 'missing'; expect(() => parseBackup(backup)).toThrow('completion'); });
   it('rejects duplicate habit-date rewards', () => { const backup = sample(); backup.completions.push({ ...backup.completions[0], id: 'different-id' }); expect(() => parseBackup(backup)).toThrow('more than once'); });
   it('rejects invalid calendar dates and empty schedules', () => { const backup = sample(); backup.revisions[0].schedule = { type: 'weekdays', days: [] }; expect(() => parseBackup(backup)).toThrow('schedule'); const other = sample(); other.habits[0].startDate = '2026-02-30'; expect(() => parseBackup(other)).toThrow('habit'); });

@@ -20,6 +20,10 @@ export function remainingForReminder(data: Snapshot, date: Day) {
 export function reminderPlan(data: Snapshot, from: Day, dismissedDay?: Day): ReminderDay[] {
   return Array.from({ length: REMINDER_DAYS }, (_, index) => {
     const date = addDays(from, index);
-    return { date, needed: date !== dismissedDay && remainingForReminder(data, date).length > 0 };
+    const needed = date !== dismissedDay && (
+      data.plans.some(plan => plan.date === date && !plan.completed) ||
+      remainingForReminder(data, date).length > 0
+    );
+    return { date, needed };
   });
 }

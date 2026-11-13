@@ -42,9 +42,11 @@ it. Neither backup files nor device control tokens are published with the code.
 - Skip complete days, rest days, archived goals and days explicitly closed in the
   evening review. A flexible weekly quota is considered only on Sunday and only
   if unfinished, with no entry already recorded that day.
-- The evening review is also available from Today. It shows wins, remaining
-  scheduled goals, and tomorrow's plan; adding a goal there defaults to tomorrow.
-  Closing the day does not create completions, change goals, or grant XP.
+- The evening review is also available from Today. Tap a recorded habit again to
+  undo the completion. Add a one-off plan with tomorrow preselected and choose
+  another date if needed. Open plans are eligible for the evening reminder on
+  their scheduled date. Progress shows their history and counts separately from
+  habit streaks and XP. Closing the day saves the review dismissal.
 - Ordinary daily sending is claimed in D1 before delivery. Concurrent runs and
   retries cannot send another notification for the same installation/day. An
   ambiguous delivery failure is not retried that evening. User-requested tests

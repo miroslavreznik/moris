@@ -9,11 +9,13 @@ export type Schedule =
 export type Habit = { id: string; title: string; icon: string; color: string; createdAt: string; startDate: Day; archivedAt?: string; archivedOn?: Day };
 export type Revision = { id: string; habitId: string; effectiveFrom: Day; schedule: Schedule };
 export type Completion = { id: string; habitId: string; localDate: Day; timeZone: string; createdAt: string };
+export type OneOffPlan = { id: string; title: string; date: Day; completed: boolean };
 export type Settings = Appearance & { soundEnabled: boolean; animationsEnabled: boolean; locale: 'en'; celebratedStage: number };
-export type Snapshot = { habits: Habit[]; revisions: Revision[]; completions: Completion[]; settings: Settings; onboardingComplete: boolean };
+export type Snapshot = { habits: Habit[]; revisions: Revision[]; completions: Completion[]; plans: OneOffPlan[]; settings: Settings; onboardingComplete: boolean };
 export type DayState = 'completed' | 'due' | 'missed' | 'not_scheduled' | 'future';
+export const MAX_TITLE_LENGTH = 100;
 export const DEFAULT_SETTINGS: Settings = { ...DEFAULT_APPEARANCE, soundEnabled: false, animationsEnabled: true, locale: 'en', celebratedStage: 0 };
-export const EMPTY: Snapshot = { habits: [], revisions: [], completions: [], settings: DEFAULT_SETTINGS, onboardingComplete: false };
+export const EMPTY: Snapshot = { habits: [], revisions: [], completions: [], plans: [], settings: DEFAULT_SETTINGS, onboardingComplete: false };
 export const STAGES = [
   { name: 'Proto-Moris', xp: 0, description: 'One cell. Several opinions. A tiny beginning with unreasonable potential.' },
   { name: 'Finny Moris', xp: 30, description: 'New fins. No swimming lessons. Your little repetitions are making waves.' },
@@ -30,6 +32,10 @@ export function today(now = new Date()): Day { return `${now.getFullYear()}-${St
 export function timeZone(): string { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; }
 // Calendar dates are moved in UTC at noon, independent of DST and the machine's zone.
 export function serial(day: Day): number { return Math.floor(new Date(`${day}T12:00:00Z`).getTime() / 86400000); }
+export function isDay(value: unknown): value is Day {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && Number.isFinite(serial(value)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
+}
 export function addDays(day: Day, amount: number): Day { return new Date((serial(day) + amount) * 86400000).toISOString().slice(0, 10); }
 export function weekday(day: Day): number { return new Date(`${day}T12:00:00Z`).getUTCDay() || 7; }
 export function monday(day: Day): Day { return addDays(day, 1 - weekday(day)); }
@@ -131,5 +137,5 @@ export function demoSnapshot(now: Day): Snapshot {
     const done = index === 0 ? (age === 0 || age % 7 !== 2 && age % 7 !== 5) : index === 1 ? age > 0 && age % 6 !== 0 : [2, 4].includes(weekday(day)) && age > 0;
     if (due && done) completions.push({ id: `${habit.id}:${day}`, habitId: habit.id, localDate: day, timeZone: timeZone(), createdAt: `${day}T12:00:00Z` });
   }
-  return { habits, revisions, completions, settings: { ...DEFAULT_SETTINGS, celebratedStage: 4 }, onboardingComplete: true };
+  return { habits, revisions, completions, plans: [], settings: { ...DEFAULT_SETTINGS, celebratedStage: 4 }, onboardingComplete: true };
 }
