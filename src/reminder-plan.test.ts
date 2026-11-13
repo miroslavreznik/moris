@@ -30,4 +30,17 @@ describe('gentle reminder eligibility', () => {
     expect(plan.filter(day => day.needed)).toEqual([{ date: '2026-11-06', needed: true }]);
     expect(data.completions).toEqual([]);
   });
+  it('includes open one-off plans on their own dates and respects dismissal', () => {
+    const data: Snapshot = { ...EMPTY, plans: [
+      { id: 'done', title: 'Call Eva', date: '2026-11-04', completed: true },
+      { id: 'open', title: 'Meet a friend', date: '2026-11-05', completed: false },
+    ] };
+
+    expect(reminderPlan(data, '2026-11-04').slice(0, 3)).toEqual([
+      { date: '2026-11-04', needed: false },
+      { date: '2026-11-05', needed: true },
+      { date: '2026-11-06', needed: false },
+    ]);
+    expect(reminderPlan(data, '2026-11-05', '2026-11-05').some(day => day.needed)).toBe(false);
+  });
 });

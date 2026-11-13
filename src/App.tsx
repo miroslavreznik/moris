@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpFromLine, BookOpen, Check, ChevronLeft, ChevronRight, CircleHelp, Coffee, Footprints, Heart, History, House, Menu, MoreHorizontal, Pencil, Plus, RefreshCw, Settings2, Share, Sparkles, Sun, Volume2, WifiOff, X, Zap, Dumbbell } from 'lucide-react';
 import { registerSW } from 'virtual:pwa-register';
-import { type Completion, type Day, type Habit, type Revision, type Schedule, type Snapshot, ICONS, COLORS, STAGES, today, addDays, monday, dates, formatDay, revisionAt, dayState, weekInfo, habitStats, scheduleLabel, xpOf, stageOf, toggleCompletion, uid, scheduled, activeOn, completedOn } from './domain';
+import { type Completion, type Day, type Habit, type OneOffPlan, type Revision, type Schedule, type Snapshot, ICONS, COLORS, STAGES, MAX_TITLE_LENGTH, isDay, today, addDays, monday, dates, formatDay, revisionAt, dayState, weekInfo, habitStats, scheduleLabel, xpOf, stageOf, toggleCompletion, uid, scheduled, activeOn, completedOn } from './domain';
 import { downloadBackup, parseBackup, backupOf } from './backup';
 import { db, isDemo } from './storage';
 import { change, useStore, writesFinished } from './store';
@@ -20,10 +20,11 @@ const tabIcons = { Today: House, Progress: History, Moris: Sparkles, Settings: S
 const stateLabels = { completed: 'Completed', due: 'Due today', missed: 'Missed', not_scheduled: 'Not scheduled', future: 'Future' };
 
 function Dialog({ title, children, close, className = '' }: { title: string; children: ReactNode; close: () => void; className?: string }) {
+  const titleId = useId();
   const ref = useRef<HTMLDialogElement>(null);
   const closeRef = useRef(close); closeRef.current = close;
   useEffect(() => { const el = ref.current!; const previous = document.activeElement as HTMLElement | null; el.showModal(); const cancel = (e: Event) => { e.preventDefault(); closeRef.current(); }; el.addEventListener('cancel', cancel); return () => { el.removeEventListener('cancel', cancel); el.close(); previous?.focus(); }; }, []);
-  return <dialog ref={ref} className={`dialog ${className}`} onClick={e => { if (e.target === e.currentTarget) close(); }} aria-labelledby="dialog-title"><div className="dialog-inner"><header className="dialog-header"><h2 id="dialog-title">{title}</h2><button className="icon-button" onClick={close} aria-label="Close dialog"><X size={22} /></button></header>{children}</div></dialog>;
+  return <dialog ref={ref} className={`dialog ${className}`} onClick={e => { if (e.target === e.currentTarget) close(); }} aria-labelledby={titleId}><div className="dialog-inner"><header className="dialog-header"><h2 id={titleId}>{title}</h2><button className="icon-button" onClick={close} aria-label="Close dialog"><X size={22} /></button></header>{children}</div></dialog>;
 }
 
 function ScheduleFields({ value, onChange, anchor }: { value: Schedule; onChange: (value: Schedule) => void; anchor: Day }) {
@@ -34,11 +35,11 @@ function ScheduleFields({ value, onChange, anchor }: { value: Schedule; onChange
   </div>;
 }
 
-function HabitForm({ habit, snapshot, now, initialStart, close, saved, report }: { habit?: Habit; snapshot: Snapshot; now: Day; initialStart?: Day; close: () => void; saved: (id: string) => void; report: (message: string) => void }) {
+function HabitForm({ habit, snapshot, now, close, saved, report }: { habit?: Habit; snapshot: Snapshot; now: Day; close: () => void; saved: (id: string) => void; report: (message: string) => void }) {
   const [title, setTitle] = useState(habit?.title || '');
   const [icon, setIcon] = useState(habit?.icon || 'spark');
   const [color, setColor] = useState(habit?.color || COLORS[0]);
-  const [startDate, setStart] = useState(habit?.startDate || initialStart || now);
+  const [startDate, setStart] = useState(habit?.startDate || now);
   const earliestChange = habit && completedOn(snapshot.completions, habit.id, now) ? addDays(now, 1) : habit && habit.startDate > now ? habit.startDate : now;
   const [effective, setEffective] = useState(earliestChange);
   const original = habit ? revisionAt(snapshot.revisions, habit.id, now)?.schedule : undefined;
@@ -68,6 +69,70 @@ function HabitForm({ habit, snapshot, now, initialStart, close, saved, report }:
     } catch (e) { setError((e as Error).message); setBusy(false); }
   }
   return <Dialog title={habit ? 'Make it yours.' : 'A little commitment.'} close={close}><form onSubmit={submit} className="habit-form"><label>Habit name<input autoFocus maxLength={100} required value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Read a few pages" /></label><fieldset className="icon-picker"><legend>A little personality</legend>{ICONS.map(name => <button type="button" key={name} className={icon === name ? 'selected' : ''} aria-label={`Use ${name} icon`} aria-pressed={icon === name} onClick={() => setIcon(name)}><Icon name={name} /></button>)}</fieldset><fieldset className="color-picker"><legend>Habit color</legend>{COLORS.map((value, i) => <button type="button" style={{ '--habit-color': value } as React.CSSProperties} className={color === value ? 'selected' : ''} key={value} aria-label={`Use ${['cobalt', 'rust', 'green', 'purple', 'teal'][i]}`} aria-pressed={color === value} onClick={() => setColor(value)}>{color === value && <Check size={18} />}</button>)}</fieldset><ScheduleFields value={schedule} onChange={setSchedule} anchor={startDate} />{!habit && <label>Start date<input type="date" required value={startDate} onChange={e => { setStart(e.target.value); if (schedule.type === 'interval') setSchedule({ ...schedule, anchorDate: e.target.value }); }} /></label>}{changed && <label>New schedule starts<input type="date" min={earliestChange} required value={effective} onChange={e => setEffective(e.target.value)} /><small>Earlier dates keep their original schedule. If today is already complete, changes start tomorrow or later. A changed weekly quota gets a partial first week.</small></label>}{error && <p className="form-error" role="alert">{error}</p>}<button type="submit" className="primary-button" disabled={busy}>{busy ? 'Saving…' : habit ? 'Save changes' : 'Add habit'}<ArrowRight size={18} /></button></form></Dialog>;
+}
+
+function PlanForm({ now, plan, close, saved }: { now: Day; plan?: OneOffPlan; close: () => void; saved?: (date: Day) => void }) {
+  const [title, setTitle] = useState(plan?.title ?? '');
+  const [date, setDate] = useState(plan?.date ?? addDays(now, 1));
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = title.trim();
+    if (!name || name.length > MAX_TITLE_LENGTH) { setError('Give your plan a short name.'); return; }
+    if (!isDay(date) || (date < today() && date !== plan?.date)) { setError('Choose today or a later date.'); return; }
+    setBusy(true);
+    setError('');
+    try {
+      await change(current => {
+        if (plan) {
+          return { ...current, plans: current.plans.map(item => item.id === plan.id ? { ...item, title: name, date } : item) };
+        }
+        return { ...current, plans: [...current.plans, { id: uid(), title: name, date, completed: false }] };
+      });
+      saved?.(date);
+      close();
+    } catch (cause) {
+      setError((cause as Error).message);
+      setBusy(false);
+    }
+  }
+
+  return <form className="habit-form plan-form" onSubmit={submit}>
+    <label>Plan name<input autoFocus required maxLength={MAX_TITLE_LENGTH} value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Join the board game night after work" /></label>
+    <label>Date<input type="date" required min={plan && plan.date < now ? plan.date : now} max="9999-12-31" value={date} onChange={e => setDate(e.target.value)} /></label>
+    {error && <p className="form-error" role="alert">{error}</p>}
+    <div className="plan-form-actions">
+      <button type="submit" className="primary-button" disabled={busy}>{busy ? 'Saving…' : plan ? 'Save changes' : 'Save plan'}</button>
+      <button type="button" className="text-button" onClick={close} disabled={busy}>Cancel</button>
+    </div>
+  </form>;
+}
+
+function PlanCheck({ plan, toggle }: { plan: OneOffPlan; toggle: (plan: OneOffPlan) => void }) {
+  return <button type="button" className="outline-button plan-check" aria-pressed={plan.completed} aria-label={`${plan.title} plan completed`} onClick={() => toggle(plan)}>
+    {plan.completed ? <Check size={17} aria-hidden="true" /> : <Plus size={17} aria-hidden="true" />}
+    <span>{plan.title}{plan.completed && <small> · Undo</small>}</span>
+  </button>;
+}
+
+function PlansProgress({ plans, now, toggle, edit }: { plans: OneOffPlan[]; now: Day; toggle: (plan: OneOffPlan) => void; edit: (plan: OneOffPlan) => void }) {
+  if (!plans.length) return null;
+  const upcoming = plans.filter(plan => plan.date > now).sort((a, b) => a.date.localeCompare(b.date));
+  const history = plans.filter(plan => plan.date <= now).sort((a, b) => b.date.localeCompare(a.date));
+  const completed = history.filter(plan => plan.completed).length;
+
+  return <details className="plans-progress">
+    <summary>One-off plans <small>{completed} completed · {upcoming.length} upcoming</small></summary>
+    <ul className="plan-history">
+      {[...upcoming, ...history].map(plan => <li key={plan.id}>
+        <time dateTime={plan.date}>{formatDay(plan.date, { month: 'short', day: 'numeric', year: 'numeric' })}</time>
+        {plan.date <= now ? <PlanCheck plan={plan} toggle={toggle} /> : <span>{plan.title}</span>}
+        {!plan.completed && <button type="button" className="icon-button" aria-label={`Edit plan ${plan.title}`} onClick={() => edit(plan)}><Pencil size={16} /></button>}
+      </li>)}
+    </ul>
+  </details>;
 }
 
 function Onboarding({ now, report }: { now: Day; report: (message: string) => void }) {
@@ -142,7 +207,8 @@ export default function App() {
   const [tab, setTab] = useState<Tab>(() => new URLSearchParams(location.search).get('view') === 'progress' ? 'Progress' : 'Today');
   const [now, setNow] = useState(today());
   const [selected, setSelected] = useState<string | null>(() => new URLSearchParams(location.search).get('goal'));
-  const [form, setForm] = useState<Habit | 'new' | 'tomorrow' | null>(null);
+  const [form, setForm] = useState<Habit | 'new' | null>(null);
+  const [editingPlan, setEditingPlan] = useState<OneOffPlan | null>(null);
   const [evening, setEvening] = useState(() => new URLSearchParams(location.search).has('evening'));
   const reminders = useReminders(data, loaded, pending);
   useEffect(() => {
@@ -202,14 +268,14 @@ export default function App() {
     return () => { clearInterval(interval); document.removeEventListener('visibilitychange', visible); window.removeEventListener('online', connect); window.removeEventListener('offline', connect); window.removeEventListener('beforeinstallprompt', install); window.removeEventListener('appinstalled', installed); };
   }, []);
   useEffect(() => {
-    if (!loaded) return;
+    if (!loaded || evening) return;
     if ((previousStage.current === null || stage > previousStage.current) && stage > data.settings.celebratedStage) {
       celebrationFrom.current = previousStage.current ?? Math.min(stage - 1, Math.max(0, data.settings.celebratedStage));
       setCelebration(stage);
       void change(current => ({ ...current, settings: { ...current.settings, celebratedStage: stage } })).catch(() => {});
     }
     previousStage.current = stage;
-  }, [loaded, stage, data.settings.celebratedStage]);
+  }, [loaded, evening, stage, data.settings.celebratedStage]);
   useEffect(() => { if (tab === 'Settings') void db.meta.get('safety-backup').then(row => { if (row) { try { setSafetyBackup(parseBackup(row.value)); } catch {} } }); }, [tab, data]);
   function go(next: Tab) { setTab(next); setSelected(null); window.scrollTo({ top: 0, behavior: 'instant' }); }
   function goal(id: string | null) { setSelected(id); setTab('Progress'); window.scrollTo({ top: 0, behavior: 'instant' }); }
@@ -231,12 +297,22 @@ export default function App() {
       await job;
     } catch (e) { report((e as Error).message); }
   }
+  function togglePlan(plan: OneOffPlan) {
+    const actionToday = today();
+    if (actionToday !== now) setNow(actionToday);
+    if (plan.date > actionToday) return;
+    void change(current => ({
+      ...current,
+      plans: current.plans.map(item => item.id === plan.id && item.date <= actionToday ? { ...item, completed: !item.completed } : item),
+    })).catch(error => report(error.message));
+  }
   async function importFile(file: File) { try { if (file.size > 20_000_000) throw new Error('Choose a backup smaller than 20 MB.'); setImported(parseBackup(JSON.parse(await file.text()))); } catch (e) { report(e instanceof SyntaxError ? 'That file is not valid JSON. Your current records are unchanged.' : (e as Error).message); } }
   async function restore() { if (!imported) return; try { await writesFinished(); downloadBackup(data, 'moris-before-restore'); await change(() => imported, true); setSafetyBackup(data); setImported(null); setSelected(null); report('Backup restored. A safety copy of your previous data is also saved on this device.'); } catch (e) { report((e as Error).message); } }
   const activeHabits = data.habits.filter(h => !h.archivedAt);
   const relevant = activeHabits.filter(h => { const revision = revisionAt(data.revisions, h.id, now); return activeOn(h, now) && revision && scheduled(revision.schedule, now); });
   const fixed = relevant.filter(h => revisionAt(data.revisions, h.id, now)?.schedule.type !== 'weekly_target');
   const flexible = relevant.filter(h => revisionAt(data.revisions, h.id, now)?.schedule.type === 'weekly_target');
+  const todayPlans = data.plans.filter(plan => plan.date === now);
   const dueCount = fixed.filter(h => completedOn(data.completions, h.id, now)).length;
   const installed = window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone;
   if (!loaded) return <div className="loading"><Moris /><p>Getting your little world ready…</p></div>;
@@ -247,8 +323,14 @@ export default function App() {
       <div className="workspace"><header className="masthead"><button className="mobile-brand" onClick={() => go('Today')}>MORIS</button><span className="masthead-note">A LITTLE WORK IN PROGRESS</span><span className="masthead-date">{formatDay(now, { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}</span></header>
         {(isDemo || !online) && <div className="status-banner">{isDemo ? <><span>DEMO EDITION · Sample data, separate from your own habits.</span><a href={import.meta.env.BASE_URL}>Start your own</a></> : <><WifiOff size={15} />Offline. Your habits still work and save here.</>}</div>}
         <main id="main-content" className={`main-content tab-${tab.toLowerCase()}`}>
-          {tab === 'Today' && <><section className="today-heading"><div><p className="eyebrow">ANOTHER DAY. A FEW LITTLE THINGS.</p><h1>Show up.<br /><span>Get a little stranger.</span></h1></div><div className={`today-moris ${happy ? 'reacting' : ''}`}><button className="companion-hello" aria-label="Say hello to Moris" onClick={() => animateMoris('greet')}><Moris stage={stage} happy={happy} appearance={data.settings} motion={motion.kind} motionKey={motion.key} />{happy && motion.kind !== 'greet' && <i className="companion-xp" key={motion.key} aria-hidden="true">+10 XP</i>}</button><span>{STAGES[stage].name.toUpperCase()}</span><span className="moris-moment">{motion.kind === 'greet' ? 'Good to see you.' : motion.kind === 'all-done' ? 'Your little wins add up.' : 'Your little work in progress.'}</span></div></section><button className="evolution-strip" onClick={() => go('Moris')} aria-label="See Moris evolution"><span>{STAGES[stage + 1] ? `${STAGES[stage + 1].xp - points} XP TO THE NEXT KIND OF WEIRD` : 'STILL GROWING. STILL WONDERFULLY YOU.'}</span><strong>{points} XP <ArrowRight size={15} /></strong><i><b style={{ width: `${STAGES[stage + 1] ? (points - STAGES[stage].xp) / (STAGES[stage + 1].xp - STAGES[stage].xp) * 100 : 100}%` }} /></i></button><section className="today-habits"><div className="section-heading"><h2>Today's little commitments.</h2><button className="text-button" onClick={() => setForm('new')}><Plus size={16} />Add habit</button></div><div className="daily-summary"><span>{fixed.length ? `${dueCount} OF ${fixed.length} SCHEDULED HABITS STAMPED` : 'NO FIXED-DAY HABITS DUE TODAY'}</span><span>ONE TAP. THAT'S IT.</span></div>{!activeHabits.length ? <Empty title="A blank page. A good place to start." text="Choose one small habit. We'll keep a place for every time you show up."><button className="primary-button" onClick={() => setForm('new')}>Add your first habit<Plus size={18} /></button></Empty> : !fixed.length ? <div className="quiet-state"><Sun size={24} /><p>No fixed commitments today.<br />Your unscheduled days count as rest.</p></div> : <div className="ticket-list">{fixed.map((habit, index) => <HabitTicket key={habit.id} habit={habit} data={data} now={now} index={index} complete={(h) => void complete(h, today())} select={() => goal(habit.id)} />)}</div>}</section>{flexible.length > 0 && <section className="flexible-section"><div className="section-heading"><h2>At your own pace.</h2><span>THIS WEEK / MON–SUN</span></div><p className="section-intro">A weekly goal. You choose the days.</p><div className="ticket-list">{flexible.map((habit, index) => <HabitTicket key={habit.id} habit={habit} data={data} now={now} index={fixed.length + index} complete={(h) => void complete(h, today())} select={() => goal(habit.id)} />)}</div></section>}{activeHabits.length > relevant.length && <section className="not-today"><h2>Resting today. Still part of the plan.</h2>{activeHabits.filter(h => !relevant.includes(h)).map(h => <button key={h.id} onClick={() => goal(h.id)}><Icon name={h.icon} size={16} /><span>{h.title}</span><ArrowRight size={15} /></button>)}</section>}<button className="outline-button evening-entry" onClick={() => setEvening(true)}>A moment for today & tomorrow<ArrowRight size={16} /></button><p className="page-footnote">Slow is still forward. Moris agrees.</p>{!installed && !installDismissed && data.completions.length > 0 && <aside className="install-nudge"><div><strong>A little closer to home.</strong><p>Add Moris to your Home Screen for easy offline visits.</p></div><button className="text-button" onClick={() => setInstallHelp(true)}>Show me<ArrowRight size={15} /></button><button className="icon-button" aria-label="Dismiss installation suggestion" onClick={() => setInstallDismissed(true)}><X size={16} /></button></aside>}</>}
-          {tab === 'Progress' && <Progress data={data} now={now} selected={selected} select={goal} edit={setForm} correct={(habit, day) => setCorrection({ habit, day })} />}
+          {tab === 'Today' && <><section className="today-heading"><div><p className="eyebrow">ANOTHER DAY. A FEW LITTLE THINGS.</p><h1>Show up.<br /><span>Get a little stranger.</span></h1></div><div className={`today-moris ${happy ? 'reacting' : ''}`}><button className="companion-hello" aria-label="Say hello to Moris" onClick={() => animateMoris('greet')}><Moris stage={stage} happy={happy} appearance={data.settings} motion={motion.kind} motionKey={motion.key} />{happy && motion.kind !== 'greet' && <i className="companion-xp" key={motion.key} aria-hidden="true">+10 XP</i>}</button><span>{STAGES[stage].name.toUpperCase()}</span><span className="moris-moment">{motion.kind === 'greet' ? 'Good to see you.' : motion.kind === 'all-done' ? 'Your little wins add up.' : 'Your little work in progress.'}</span></div></section><button className="evolution-strip" onClick={() => go('Moris')} aria-label="See Moris evolution"><span>{STAGES[stage + 1] ? `${STAGES[stage + 1].xp - points} XP TO THE NEXT KIND OF WEIRD` : 'STILL GROWING. STILL WONDERFULLY YOU.'}</span><strong>{points} XP <ArrowRight size={15} /></strong><i><b style={{ width: `${STAGES[stage + 1] ? (points - STAGES[stage].xp) / (STAGES[stage + 1].xp - STAGES[stage].xp) * 100 : 100}%` }} /></i></button><section className="today-habits"><div className="section-heading"><h2>Today's little commitments.</h2><button className="text-button" onClick={() => setForm('new')}><Plus size={16} />Add habit</button></div><div className="daily-summary"><span>{fixed.length ? `${dueCount} OF ${fixed.length} SCHEDULED HABITS STAMPED` : 'NO FIXED-DAY HABITS DUE TODAY'}</span><span>ONE TAP. THAT'S IT.</span></div>{!activeHabits.length ? <Empty title="A blank page. A good place to start." text="Choose one small habit. We'll keep a place for every time you show up."><button className="primary-button" onClick={() => setForm('new')}>Add your first habit<Plus size={18} /></button></Empty> : !fixed.length ? <div className="quiet-state"><Sun size={24} /><p>No fixed commitments today.<br />Your unscheduled days count as rest.</p></div> : <div className="ticket-list">{fixed.map((habit, index) => <HabitTicket key={habit.id} habit={habit} data={data} now={now} index={index} complete={(h) => void complete(h, today())} select={() => goal(habit.id)} />)}</div>}</section>{flexible.length > 0 && <section className="flexible-section"><div className="section-heading"><h2>At your own pace.</h2><span>THIS WEEK / MON–SUN</span></div><p className="section-intro">A weekly goal. You choose the days.</p><div className="ticket-list">{flexible.map((habit, index) => <HabitTicket key={habit.id} habit={habit} data={data} now={now} index={fixed.length + index} complete={(h) => void complete(h, today())} select={() => goal(habit.id)} />)}</div></section>}{activeHabits.length > relevant.length && <section className="not-today"><h2>Resting today. Still part of the plan.</h2>{activeHabits.filter(h => !relevant.includes(h)).map(h => <button key={h.id} onClick={() => goal(h.id)}><Icon name={h.icon} size={16} /><span>{h.title}</span><ArrowRight size={15} /></button>)}</section>}{todayPlans.length > 0 && <section className="today-plans">
+            <div className="section-heading"><h2>Today’s one-off plans</h2></div>
+            <div className="evening-actions">{todayPlans.map(plan => <PlanCheck key={plan.id} plan={plan} toggle={togglePlan} />)}</div>
+          </section>}<button className="outline-button evening-entry" onClick={() => setEvening(true)}>A moment for today & tomorrow<ArrowRight size={16} /></button><p className="page-footnote">Slow is still forward. Moris agrees.</p>{!installed && !installDismissed && data.completions.length > 0 && <aside className="install-nudge"><div><strong>A little closer to home.</strong><p>Add Moris to your Home Screen for easy offline visits.</p></div><button className="text-button" onClick={() => setInstallHelp(true)}>Show me<ArrowRight size={15} /></button><button className="icon-button" aria-label="Dismiss installation suggestion" onClick={() => setInstallDismissed(true)}><X size={16} /></button></aside>}</>}
+          {tab === 'Progress' && <>
+            <Progress data={data} now={now} selected={selected} select={goal} edit={setForm} correct={(habit, day) => setCorrection({ habit, day })} />
+            {!selected && <PlansProgress plans={data.plans} now={now} toggle={togglePlan} edit={setEditingPlan} />}
+          </>}
           {tab === 'Moris' && <><PageTitle kicker="A FICTIONAL METAMORPHOSIS. A REAL LITTLE EFFORT." title="Still becoming." description="Every repetition changes you. And this little weirdo." /><div className="evolution-portrait"><Moris stage={stage} happy={happy} appearance={data.settings} motion={motion.kind} motionKey={motion.key} /><div><p className="eyebrow">YOUR CURRENT EDITION</p><h2>{STAGES[stage].name}</h2><p>{STAGES[stage].description}</p><strong>{points} XP</strong></div></div><button className="outline-button companion-customize" onClick={() => setCustomizing(true)}>Make this Moris yours<ArrowRight size={16} /></button><EvolutionProgress points={points} /><div className="evolution-ladder">{STAGES.map((item, i) => <article className={i <= stage ? 'unlocked' : 'locked'} key={item.name}><span className="edition-number">ED. 0{i + 1}</span><Moris stage={i} appearance={data.settings} /><div><h3>{item.name}</h3><span>{item.xp} XP · {i <= stage ? 'Unlocked' : 'Still to come'}</span><p>{item.description}</p></div>{i <= stage && <Check size={19} />}</article>)}</div><p className="page-footnote">A missed day never takes away earned XP. Undoing an entry recalculates it.</p></>}
           {tab === 'Settings' && <><PageTitle kicker="MAKE YOURSELF AT HOME" title="The little details." description="Your habits. Your pace. Your preferences." /><section className="settings-section"><h2>Your own little weirdo.</h2><p>Choose your Moris’s color and one little quirk. They stay with every evolution.</p><button className="outline-button" onClick={() => setCustomizing(true)}>Choose your Moris<ArrowRight size={16} /></button></section><ReminderSettings controls={reminders} /><section className="settings-section"><h2>A little more delight.</h2><label className="setting-toggle"><span><strong>Completion sounds</strong><small>A soft pop and a tiny chime. Off by default.</small></span><input type="checkbox" checked={data.settings.soundEnabled} onChange={e => void change(current => ({ ...current, settings: { ...current.settings, soundEnabled: e.target.checked } })).catch(e => report(e.message))} /></label><label className="setting-toggle"><span><strong>Extra animations</strong><small>Your device's reduced-motion preference always comes first.</small></span><input type="checkbox" checked={data.settings.animationsEnabled} onChange={e => void change(current => ({ ...current, settings: { ...current.settings, animationsEnabled: e.target.checked } })).catch(e => report(e.message))} /></label></section><section className="settings-section"><h2>Your habits live here.</h2><p>Everything is saved on this device. Clearing browser data, removing the app, or losing your device can erase your records. There is no automatic cloud backup or sync.</p><div className="backup-actions"><button className="primary-button" onClick={() => { downloadBackup(data); report('Your JSON backup is ready to save. Keep it somewhere safe.'); }}><ArrowDownToLine size={18} />Export backup</button><button className="outline-button" onClick={() => fileRef.current?.click()}><ArrowUpFromLine size={18} />Restore backup</button></div><input ref={fileRef} type="file" className="sr-only" accept="application/json,.json" aria-label="Choose Moris backup file" onChange={e => { const file = e.target.files?.[0]; if (file) void importFile(file); e.target.value = ''; }} />{safetyBackup && <button className="text-button" onClick={() => downloadBackup(safetyBackup, 'moris-safety-copy')}>Download the safety copy from your last restore<ArrowDownToLine size={15} /></button>}<p className="small-note">Restoring replaces current records after downloading a fresh backup. A safety copy also stays on this device.</p></section><section className="settings-section"><h2>A place on your Home Screen.</h2><p>{installed ? 'Moris is running as an installed app. Make yourself at home.' : 'Add Moris to your Home Screen. After the first successful load, your habits work without an internet connection.'}</p><button className="outline-button" onClick={() => setInstallHelp(true)}><Plus size={17} />{installed ? 'Installation help' : 'Add to Home Screen'}</button></section><section className="settings-section"><div className="section-heading"><h2>All your little commitments.</h2><button className="text-button" onClick={() => setForm('new')}>Add<Plus size={15} /></button></div>{data.habits.map(h => <div className="manage-habit" key={h.id}><Icon name={h.icon} /><span><strong>{h.title}</strong><small>{h.archivedAt ? `Archived ${formatDay(h.archivedOn!)}` : scheduleLabel(revisionAt(data.revisions, h.id, now)?.schedule || { type: 'daily' })}</small></span>{h.archivedAt ? <button className="text-button" onClick={() => goal(h.id)}>History</button> : <><button className="icon-button" onClick={() => setForm(h)} aria-label={`Edit ${h.title}`}><Pencil size={17} /></button><button className="text-button" onClick={() => setArchive(h)}>Archive</button></>}</div>)}</section><p className="page-footnote">MORIS / FIRST EDITION · ENGLISH · MADE FOR REPEATING</p></>}
         </main><footer className="workspace-footer"><span>EVERY REPETITION CHANGES YOU.</span><span>{pending ? 'SAVING TO THIS DEVICE…' : 'SAVED ON THIS DEVICE'}</span></footer>
@@ -256,8 +338,9 @@ export default function App() {
     </>}
     {notice && <div className="toast" role="status"><Check size={17} /><span>{notice}</span>{lastAction && <button onClick={() => { const action = lastAction; setLastAction(null); void complete(action.habit, action.day); }}>Undo</button>}<button className="toast-close" onClick={() => { setNotice(''); setLastAction(null); }} aria-label="Dismiss message"><X size={16} /></button></div>}
     {customizing && <Dialog title="One Moris. Yours." close={() => setCustomizing(false)} className="companion-dialog"><CompanionEditor stage={stage} appearance={data.settings} onSave={async appearance => { await change(current => ({ ...current, settings: { ...current.settings, ...appearance } })); setCustomizing(false); report('Your color. Your little quirk. Your Moris.'); animateMoris('greet'); }} /></Dialog>}
-    {evening && <EveningReview data={data} now={now} complete={(habit) => void complete(habit, today())} close={() => setEvening(false)} finish={() => { void reminders.dismissToday().catch(e => report(e.message)); setEvening(false); }} planTomorrow={() => { setEvening(false); setForm('tomorrow'); }} />}
-    {form && <HabitForm habit={typeof form === 'string' ? undefined : form} initialStart={form === 'tomorrow' ? addDays(now, 1) : undefined} snapshot={data} now={now} close={() => setForm(null)} saved={() => {}} report={report} />}
+    {evening && <EveningReview data={data} now={now} complete={(habit) => void complete(habit, now)} togglePlan={togglePlan} close={() => setEvening(false)} finish={() => { void reminders.dismissToday().catch(e => report(e.message)); setEvening(false); }} />}
+    {form && <HabitForm habit={typeof form === 'string' ? undefined : form} snapshot={data} now={now} close={() => setForm(null)} saved={() => {}} report={report} />}
+    {editingPlan && <Dialog title="Edit one-off plan" close={() => setEditingPlan(null)}><PlanForm now={now} plan={editingPlan} close={() => setEditingPlan(null)} /></Dialog>}
     {correction && <Dialog title={correction.day === now ? 'Today’s little record.' : 'A little correction.'} close={() => setCorrection(null)}><p className="dialog-kicker">{correction.habit.title}</p><h3 className="correction-date">{formatDay(correction.day, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</h3><p>{completedOn(data.completions, correction.habit.id, correction.day) ? 'This date is marked complete. Removing it recalculates XP and streaks.' : `This will record a ${correction.day === now ? 'completion for today' : 'retrospective completion'}. It earns 10 XP, once for this habit and date.`}</p>{completedOn(data.completions, correction.habit.id, correction.day) && <p className="small-note">Recorded in {data.completions.find(c => c.habitId === correction.habit.id && c.localDate === correction.day)?.timeZone}. Travel never shifts this historical date.</p>}<button className="primary-button" onClick={() => { void complete(correction.habit, correction.day); setCorrection(null); }}>{completedOn(data.completions, correction.habit.id, correction.day) ? 'Remove completion' : 'Mark as done'}<Check size={18} /></button></Dialog>}
     {archive && <Dialog title="Give this one a rest?" close={() => setArchive(null)}><p><strong>{archive.title}</strong> will leave Today. Its history and earned XP stay with you.</p><button className="primary-button" onClick={() => { void change(current => ({ ...current, habits: current.habits.map(h => h.id === archive.id ? { ...h, archivedAt: new Date().toISOString(), archivedOn: now } : h) })).then(() => { setArchive(null); report('Archived. A little rest, with all your progress kept.'); }).catch(e => report(e.message)); }}>Archive habit<ArrowRight size={17} /></button></Dialog>}
     {imported && <Dialog title="Bring your little world back." close={() => setImported(null)}><p>This backup contains <strong>{imported.habits.length} habits</strong> and <strong>{imported.completions.length} completions</strong>.</p><p>It will replace your current records. First, Moris will download a backup of what is here now and store a safety copy on this device.</p><button className="primary-button" onClick={() => void restore()}>Back up & replace records<RefreshCw size={17} /></button><button className="text-button" onClick={() => setImported(null)}>Keep my current records</button></Dialog>}
@@ -267,12 +350,51 @@ export default function App() {
   </div>;
 }
 
-function EveningReview({ data, now, complete, close, finish, planTomorrow }: { data: Snapshot; now: Day; complete: (habit: Habit) => void; close: () => void; finish: () => void; planTomorrow: () => void }) {
-  const remaining = remainingForReminder(data, now);
-  const done = data.habits.filter(habit => completedOn(data.completions, habit.id, now));
+function EveningReview({ data, now, complete, togglePlan, close, finish }: { data: Snapshot; now: Day; complete: (habit: Habit) => void; togglePlan: (plan: OneOffPlan) => void; close: () => void; finish: () => void }) {
+  const [reviewed, setReviewed] = useState<string[]>([]);
+  const [addingPlan, setAddingPlan] = useState(false);
+  const [savedPlanDate, setSavedPlanDate] = useState<Day | null>(null);
+  const addPlanButton = useRef<HTMLButtonElement>(null);
+  const remaining = new Set(remainingForReminder(data, now).map(habit => habit.id));
+  const habits = data.habits.map(habit => ({ habit, done: completedOn(data.completions, habit.id, now), key: `${now}:${habit.id}` }))
+    .filter(({ habit, done, key }) => done || remaining.has(habit.id) || reviewed.includes(key));
   const tomorrow = addDays(now, 1);
   const planned = data.habits.filter(habit => { const revision = revisionAt(data.revisions, habit.id, tomorrow); return activeOn(habit, tomorrow) && revision && scheduled(revision.schedule, tomorrow); });
-  return <Dialog title="A little moment for you." close={close} className="evening-review"><p>Whatever today held, you’re welcome here. Mark what you did, then leave a little room for tomorrow.</p><section><h3>Today, in little wins.</h3>{done.length ? <ul className="evening-list">{done.map(habit => <li key={habit.id}><Check size={17} /><span>{habit.title}</span></li>)}</ul> : <p className="small-note">Your day is more than the things you tick off.</p>}{remaining.length > 0 && <><p className="small-note">Did any of these happen? You can leave them as they are, too.</p><div className="evening-actions">{remaining.map(habit => <button key={habit.id} className="outline-button" onClick={() => complete(habit)} aria-label={`Mark ${habit.title} done today`}><Check size={17} />{habit.title}</button>)}</div></>}{!remaining.length && <p className="small-note">Nothing else needs checking in today.</p>}</section><section><h3>A little look at tomorrow.</h3>{planned.length ? <ul className="evening-list">{planned.map(habit => <li key={habit.id}><Icon name={habit.icon} size={17} /><span>{habit.title}</span>{revisionAt(data.revisions, habit.id, tomorrow)?.schedule.type === 'weekly_target' && <small>At your own pace this week</small>}</li>)}</ul> : <p className="small-note">A little breathing room. Add a goal if you want one.</p>}<button className="text-button" onClick={planTomorrow}><Plus size={16} />Add a goal for tomorrow</button></section><button className="primary-button" onClick={finish}>That’s enough for today<ArrowRight size={17} /></button><p className="small-note">Unfinished goals stay unchanged. No more reminder for today once this choice syncs.</p></Dialog>;
+  const todayPlans = data.plans.filter(plan => plan.date === now);
+  const tomorrowPlans = data.plans.filter(plan => plan.date === tomorrow);
+  const closePlanForm = () => { setAddingPlan(false); addPlanButton.current?.focus(); };
+  return <Dialog title="A little moment for you." close={close} className="evening-review">
+    <p>Whatever today held, you’re welcome here. Mark what you did, then leave a little room for tomorrow.</p>
+    <section>
+      <h3>Today, in little wins.</h3>
+      {habits.length ? <div className="evening-actions">{habits.map(({ habit, done, key }) => (
+        <button key={key} type="button" className="outline-button" aria-pressed={done} aria-label={`${habit.title} completed today`} onClick={() => {
+          // Keep corrected entries available even if they are outside today's reminder prompts.
+          setReviewed(current => current.includes(key) ? current : [...current, key]);
+          complete(habit);
+        }}>
+          {done ? <Check size={17} aria-hidden="true" /> : <Plus size={17} aria-hidden="true" />}
+          <span>{habit.title}{done && <small> · Undo</small>}</span>
+        </button>
+      ))}</div> : !todayPlans.length && <p className="small-note">Nothing needs checking in today.</p>}
+    </section>
+    {todayPlans.length > 0 && <section>
+      <h3>Today’s one-off plans</h3>
+      <div className="evening-actions">{todayPlans.map(plan => <PlanCheck key={plan.id} plan={plan} toggle={togglePlan} />)}</div>
+    </section>}
+    <section>
+      <h3>A little look at tomorrow.</h3>
+      {planned.length + tomorrowPlans.length > 0 && <ul className="evening-list">
+        {planned.map(habit => <li key={`habit:${habit.id}`}><Icon name={habit.icon} size={17} /><span>{habit.title}</span>{revisionAt(data.revisions, habit.id, tomorrow)?.schedule.type === 'weekly_target' && <small>At your own pace this week</small>}</li>)}
+        {tomorrowPlans.map(plan => <li key={`plan:${plan.id}`}><span>{plan.title}</span><small>One-off plan</small></li>)}
+      </ul>}
+      <button ref={addPlanButton} type="button" className="text-button" aria-expanded={addingPlan} onClick={() => { setSavedPlanDate(null); setAddingPlan(open => !open); }}><Plus size={16} />Add a one-off plan</button>
+      {addingPlan && <PlanForm now={now} close={closePlanForm} saved={setSavedPlanDate} />}
+      <div role="status">{savedPlanDate && <p className="small-note">Plan saved for {formatDay(savedPlanDate, { weekday: 'short', month: 'short', day: 'numeric' })}.</p>}</div>
+    </section>
+    <button className="primary-button" onClick={finish}>That’s enough for today<ArrowRight size={17} /></button>
+    <p className="small-note">Unfinished goals stay unchanged. No more reminder for today once this choice syncs.</p>
+  </Dialog>;
 }
 
 function EvolutionProgress({ points }: { points: number }) {
