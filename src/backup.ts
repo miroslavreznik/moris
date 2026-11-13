@@ -1,7 +1,7 @@
 import { MORIS_COLORS, MORIS_DETAILS, appearanceOf } from './appearance';
-import { type Snapshot, type Schedule, type Habit, type Revision, type Completion, type OneOffPlan, DEFAULT_SETTINGS, MAX_TITLE_LENGTH, STAGES, isDay, revisionAt, scheduled } from './domain';
-export type Backup = Snapshot & { schemaVersion: 2; exportedAt: string };
-export function backupOf(state: Snapshot): Backup { return { ...state, schemaVersion: 2, exportedAt: new Date().toISOString() }; }
+import { type Snapshot, type Schedule, type Habit, type HabitPause, type Revision, type Completion, type OneOffPlan, DEFAULT_SETTINGS, MAX_TITLE_LENGTH, STAGES, isDay, revisionAt, scheduled } from './domain';
+export type Backup = Snapshot & { schemaVersion: 3; exportedAt: string };
+export function backupOf(state: Snapshot): Backup { return { ...state, schemaVersion: 3, exportedAt: new Date().toISOString() }; }
 export function downloadBackup(state: Snapshot, prefix = 'moris-backup'): void {
   const blob = new Blob([JSON.stringify(backupOf(state), null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob), link = document.createElement('a');
@@ -19,8 +19,19 @@ function schedule(value: unknown): value is Schedule {
   if (value.type === 'weekdays') return Array.isArray(value.days) && value.days.length > 0 && value.days.length <= 7 && new Set(value.days).size === value.days.length && value.days.every(d => Number.isInteger(d) && d >= 1 && d <= 7);
   return false;
 }
+function parsePauses(value: unknown): HabitPause[] {
+  if (!Array.isArray(value)) fail('habit pauses are invalid.');
+  const pauses: HabitPause[] = [];
+  for (const pause of value) {
+    if (!object(pause) || !isDay(pause.from) || (pause.until !== undefined && (!isDay(pause.until) || pause.until <= pause.from))) fail('a habit pause has an invalid date.');
+    const previous = pauses.at(-1);
+    if (previous && (previous.until === undefined || pause.from < previous.until)) fail('habit pauses are out of order or overlap.');
+    pauses.push(pause.until === undefined ? { from: pause.from } : { from: pause.from, until: pause.until });
+  }
+  return pauses;
+}
 export function parseBackup(input: unknown): Snapshot {
-  if (!object(input) || (input.schemaVersion !== 1 && input.schemaVersion !== 2)) fail('the format version is not supported.');
+  if (!object(input) || (input.schemaVersion !== 1 && input.schemaVersion !== 2 && input.schemaVersion !== 3)) fail('the format version is not supported.');
   if (!Array.isArray(input.habits) || !Array.isArray(input.revisions) || !Array.isArray(input.completions)) fail('habit, schedule, or completion records are missing.');
   const rawPlans = input.schemaVersion === 1 ? [] : input.plans;
   if (!Array.isArray(rawPlans)) fail('plan records are missing or invalid.');
@@ -30,7 +41,8 @@ export function parseBackup(input: unknown): Snapshot {
     if (!object(h) || !text(h.id) || ids.has(h.id) || !text(h.title, MAX_TITLE_LENGTH) || !h.title.trim() || !text(h.icon, 30) || typeof h.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(h.color) || !instant(h.createdAt) || !isDay(h.startDate)) return fail('a habit is invalid or duplicated.');
     ids.add(h.id);
     if ((h.archivedAt !== undefined || h.archivedOn !== undefined) && (!instant(h.archivedAt) || !isDay(h.archivedOn))) fail('an archive date is invalid.');
-    return { id: h.id, title: h.title.trim(), icon: h.icon, color: h.color, createdAt: h.createdAt, startDate: h.startDate, ...(h.archivedAt ? { archivedAt: h.archivedAt as string, archivedOn: h.archivedOn as string } : {}) };
+    const pauses = input.schemaVersion === 3 && h.pauses !== undefined ? parsePauses(h.pauses) : undefined;
+    return { id: h.id, title: h.title.trim(), icon: h.icon, color: h.color, createdAt: h.createdAt, startDate: h.startDate, ...(h.archivedAt ? { archivedAt: h.archivedAt as string, archivedOn: h.archivedOn as string } : {}), ...(pauses !== undefined ? { pauses } : {}) };
   });
   const revisionIds = new Set<string>(), revisionDates = new Set<string>();
   const revisions: Revision[] = input.revisions.map(r => {
@@ -49,7 +61,7 @@ export function parseBackup(input: unknown): Snapshot {
     try { new Intl.DateTimeFormat('en', { timeZone: c.timeZone }).format(); } catch { fail('a completion has an unknown time zone.'); }
     const habit = habits.find(h => h.id === c.habitId)!;
     const revision = revisionAt(revisions, habit.id, c.localDate);
-    // Archive-day completions recorded before archiving are retained legitimately.
+    // Validate the underlying schedule so a pause never erases a valid entry or historical correction.
     if (c.localDate < habit.startDate || habit.archivedOn && c.localDate > habit.archivedOn || !revision || !scheduled(revision.schedule, c.localDate)) fail('a completion is outside its historical schedule.');
     pairs.add(key); completionIds.add(c.id);
     return { id: c.id, habitId: c.habitId, localDate: c.localDate, createdAt: c.createdAt, timeZone: c.timeZone };

@@ -6,7 +6,8 @@ export type Schedule =
   | { type: 'interval'; everyNDays: number; anchorDate: Day }
   | { type: 'weekdays'; days: number[] }
   | { type: 'weekly_target'; targetCount: number };
-export type Habit = { id: string; title: string; icon: string; color: string; createdAt: string; startDate: Day; archivedAt?: string; archivedOn?: Day };
+export type HabitPause = { from: Day; until?: Day };
+export type Habit = { id: string; title: string; icon: string; color: string; createdAt: string; startDate: Day; archivedAt?: string; archivedOn?: Day; pauses?: HabitPause[] };
 export type Revision = { id: string; habitId: string; effectiveFrom: Day; schedule: Schedule };
 export type Completion = { id: string; habitId: string; localDate: Day; timeZone: string; createdAt: string };
 export type OneOffPlan = { id: string; title: string; date: Day; completed: boolean };
@@ -44,7 +45,33 @@ export function formatDay(day: Day, options: Intl.DateTimeFormatOptions = { mont
 export function revisionAt(revisions: Revision[], habitId: string, day: Day): Revision | undefined {
   return revisions.filter(r => r.habitId === habitId && r.effectiveFrom <= day).sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0];
 }
-export function activeOn(habit: Habit, day: Day): boolean { return day >= habit.startDate && (!habit.archivedOn || day < habit.archivedOn); }
+function pauseAt(habit: Habit, day: Day): HabitPause | undefined {
+  return habit.pauses?.find(pause => pause.from <= day && (!pause.until || day < pause.until));
+}
+export function pausedOn(habit: Habit, day: Day): boolean { return pauseAt(habit, day) !== undefined; }
+export function pauseHabit(habit: Habit, day: Day): Habit {
+  if (habit.archivedAt || pausedOn(habit, day)) return habit;
+  const pauses = [...habit.pauses ?? []];
+  const next = pauses.findIndex(pause => pause.from > day);
+  // A stored pause can still be in the future after the local date moves backward.
+  if (next === -1) pauses.push({ from: day });
+  else pauses.splice(next, 0, { from: day, until: pauses[next].from });
+  return { ...habit, pauses };
+}
+export function resumeHabit(habit: Habit, day: Day): Habit {
+  const pause = pauseAt(habit, day);
+  if (habit.archivedAt || !pause) return habit;
+  const { pauses, ...resumed } = habit;
+  const history = pauses!.flatMap(period => {
+    if (period !== pause) return [period];
+    return period.from === day ? [] : [{ ...period, until: day }];
+  });
+  return history.length ? { ...resumed, pauses: history } : resumed;
+}
+function withinHabitLifetime(habit: Habit, day: Day): boolean {
+  return day >= habit.startDate && (!habit.archivedOn || day < habit.archivedOn);
+}
+export function activeOn(habit: Habit, day: Day): boolean { return withinHabitLifetime(habit, day) && !pausedOn(habit, day); }
 export function scheduled(schedule: Schedule, day: Day): boolean {
   switch (schedule.type) {
     case 'daily': return true;
@@ -65,22 +92,28 @@ export function dayState(habit: Habit, revisions: Revision[], completions: Compl
 export type Week = { start: Day; end: Day; count: number; target: number; state: 'completed' | 'due' | 'missed' | 'partial' | 'not_scheduled' | 'future'; partial: boolean; completionDates: Day[] };
 export function weekInfo(habit: Habit, revisions: Revision[], completions: Completion[], start: Day, now: Day): Week {
   const end = addDays(start, 6);
-  const days = dates(start, end).filter(day => activeOn(habit, day));
-  // A changed or newly introduced quota is a partial period: never retroactively fail it.
-  const weeklyDays = days.filter(day => revisionAt(revisions, habit.id, day)?.schedule.type === 'weekly_target');
+  const recorded = new Set(completions.filter(c => c.habitId === habit.id && c.localDate >= start && c.localDate <= end).map(c => c.localDate));
+  const weeklyDays = dates(start, end)
+    .filter(day => withinHabitLifetime(habit, day) && (!pausedOn(habit, day) || recorded.has(day)))
+    .map(day => ({ day, revision: revisionAt(revisions, habit.id, day) }))
+    .filter(({ revision }) => revision?.schedule.type === 'weekly_target');
   if (!weeklyDays.length) return { start, end, count: 0, target: 0, state: 'not_scheduled', partial: true, completionDates: [] };
-  const lastRevision = revisionAt(revisions, habit.id, weeklyDays[weeklyDays.length - 1])!;
+  const lastRevision = weeklyDays[weeklyDays.length - 1].revision!;
   const target = (lastRevision.schedule as Extract<Schedule, { type: 'weekly_target' }>).targetCount;
-  const applicableDays = weeklyDays.filter(day => revisionAt(revisions, habit.id, day)?.id === lastRevision.id);
-  const unique = new Set(completions.filter(c => c.habitId === habit.id && applicableDays.includes(c.localDate)).map(c => c.localDate));
-  const count = unique.size;
-  const partial = applicableDays.length < 7;
-  const state = start > now ? 'future' : count >= target ? 'completed' : end >= now ? 'due' : partial ? 'partial' : 'missed';
-  return { start, end, count, target, state, partial, completionDates: [...unique].sort() };
+  const applicableDays = weeklyDays.filter(({ revision }) => revision?.id === lastRevision.id).map(({ day }) => day);
+  const completionDates = applicableDays.filter(day => recorded.has(day));
+  const count = completionDates.length;
+  const activeDays = applicableDays.filter(day => !pausedOn(habit, day));
+  // A shortened quota period does not break a streak if it is unfinished.
+  const partial = activeDays.length < 7;
+  const open = end >= now && (!pausedOn(habit, now) || activeDays.some(day => day >= now));
+  const state = start > now ? 'future' : count >= target ? 'completed' : open ? 'due' : partial ? 'partial' : 'missed';
+  return { start, end, count, target, state, partial, completionDates };
 }
 export function habitStats(habit: Habit, revisions: Revision[], completions: Completion[], now: Day): { current: number; best: number; unit: string; total: number } {
   const type = revisionAt(revisions, habit.id, now)?.schedule.type;
-  const total = new Set(completions.filter(c => c.habitId === habit.id).map(c => c.localDate)).size;
+  const recorded = new Set(completions.filter(c => c.habitId === habit.id).map(c => c.localDate));
+  const total = recorded.size;
   let run = 0, best = 0;
   const events: { done: boolean; open: boolean }[] = [];
   if (type === 'weekly_target') {
@@ -92,8 +125,9 @@ export function habitStats(habit: Habit, revisions: Revision[], completions: Com
   } else {
     for (const day of dates(habit.startDate, now)) {
       const revision = revisionAt(revisions, habit.id, day);
-      if (!activeOn(habit, day) || !revision || revision.schedule.type === 'weekly_target' || !scheduled(revision.schedule, day)) continue;
-      events.push({ done: completedOn(completions, habit.id, day), open: day === now });
+      const done = recorded.has(day);
+      if (!withinHabitLifetime(habit, day) || (!done && pausedOn(habit, day)) || !revision || revision.schedule.type === 'weekly_target' || !scheduled(revision.schedule, day)) continue;
+      events.push({ done, open: day === now });
     }
   }
   for (const event of events) { if (event.done) { run++; best = Math.max(best, run); } else if (!event.open) run = 0; }
@@ -116,7 +150,7 @@ export function toggleCompletion(snapshot: Snapshot, habitId: string, day: Day, 
   if (day > now) throw new Error('Future days cannot be completed.');
   if (existing) return { ...snapshot, completions: snapshot.completions.filter(c => c.id !== existing.id) };
   const revision = revisionAt(snapshot.revisions, habitId, day);
-  if ((!activeOn(habit, day) && day !== habit.archivedOn) || !revision || !scheduled(revision.schedule, day)) throw new Error('This habit was not scheduled on that date.');
+  if (pausedOn(habit, day) || (!withinHabitLifetime(habit, day) && day !== habit.archivedOn) || !revision || !scheduled(revision.schedule, day)) throw new Error('This habit was not scheduled on that date.');
   return { ...snapshot, completions: [...snapshot.completions, { id: `${habitId}:${day}`, habitId, localDate: day, timeZone: zone, createdAt: new Date().toISOString() }] };
 }
 

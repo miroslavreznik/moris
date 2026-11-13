@@ -15,6 +15,13 @@ describe('safe backup parsing', () => {
     expect(restored.settings).toMatchObject({ morisColor: 'tangerine', morisDetail: 'freckles' });
     expect(restored.plans).toEqual([]);
   });
+  it('restores v2 plans and defaults to no pauses', () => {
+    const plans = [{ id: 'one', title: 'Meet a friend', date: '2026-10-25', completed: true }];
+    const backup = { ...sample(), schemaVersion: 2, plans };
+    const restored = parseBackup(backup);
+    expect(restored.plans).toEqual(plans);
+    expect(restored.habits.every(habit => habit.pauses === undefined)).toBe(true);
+  });
   it('rejects invalid appearance values before touching records', () => {
     const backup = JSON.parse(JSON.stringify(sample())); backup.settings.morisColor = 'unknown';
     expect(() => parseBackup(backup)).toThrow('color');
@@ -45,7 +52,43 @@ describe('safe backup parsing', () => {
     };
     expect(parseBackup(JSON.parse(JSON.stringify(backupOf(state))))).toEqual(state);
   });
-  it('rejects unsupported versions before changing anything', () => { expect(() => parseBackup({ ...sample(), schemaVersion: 3 })).toThrow('version'); });
+  it('round-trips pauses, including ones before the start date, and keeps scheduled completions', () => {
+    const backup = sample();
+    const habit = backup.habits[0];
+    habit.pauses = [{ from: '2026-09-20', until: '2026-09-25' }, { from: '2026-10-19' }];
+    habit.archivedOn = '2026-10-25';
+    habit.archivedAt = '2026-10-25T18:00:00Z';
+    const corrected = backup.completions.find(c => c.habitId === habit.id && c.localDate === '2026-10-24')!;
+    corrected.createdAt = '2026-10-25T15:00:00Z';
+    backup.habits[1].pauses = [{ from: '2026-10-05', until: '2026-10-10' }, { from: '2026-10-10', until: '2026-10-25' }];
+    backup.habits[1].archivedOn = '2026-10-25';
+    backup.habits[1].archivedAt = '2026-10-25T18:00:00Z';
+
+    const restored = parseBackup(JSON.parse(JSON.stringify(backup)));
+    expect(backup.schemaVersion).toBe(3);
+    expect(restored.habits).toEqual(backup.habits);
+    expect(restored.completions).toEqual(backup.completions);
+    const completionDays = restored.completions.filter(c => c.habitId === habit.id).map(c => c.localDate);
+    expect(completionDays).toEqual(expect.arrayContaining(['2026-10-19', corrected.localDate, habit.archivedOn]));
+  });
+  it('rejects malformed, empty, reversed, overlapping, or out-of-order pause intervals', () => {
+    const backup = sample();
+    for (const pauses of [
+      null,
+      [{}],
+      [{ from: '2026-02-30' }],
+      [{ from: '2026-02-01', until: '2026-02-30' }],
+      [{ from: '2026-10-05', until: '2026-10-05' }],
+      [{ from: '2026-10-06', until: '2026-10-05' }],
+      [{ from: '2026-10-01', until: '2026-10-05' }, { from: '2026-10-04' }],
+      [{ from: '2026-10-05', until: '2026-10-06' }, { from: '2026-10-01', until: '2026-10-02' }],
+      [{ from: '2026-10-01' }, { from: '2026-10-05', until: '2026-10-06' }],
+    ]) {
+      const habits = [{ ...backup.habits[0], pauses }, ...backup.habits.slice(1)];
+      expect(() => parseBackup({ ...backup, habits })).toThrow('habit pause');
+    }
+  });
+  it('rejects unsupported versions before changing anything', () => { expect(() => parseBackup({ ...sample(), schemaVersion: 4 })).toThrow('version'); });
   it('rejects a current backup without a plans array', () => {
     expect(() => parseBackup({ ...sample(), plans: undefined })).toThrow('plan records');
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type Habit, type Revision, type Completion, type Schedule, type Snapshot, EMPTY, STAGES, addDays, today, monday, weekday, dayState, habitStats, weekInfo, xpOf, stageOf, toggleCompletion, demoSnapshot, revisionAt } from './domain';
+import { type Habit, type Revision, type Completion, type Schedule, type Snapshot, EMPTY, STAGES, activeOn, addDays, monday, weekday, dayState, habitStats, weekInfo, xpOf, stageOf, toggleCompletion, demoSnapshot, revisionAt, pauseHabit, pausedOn, resumeHabit } from './domain';
 const habit: Habit = { id: 'read', title: 'Read', icon: 'book', color: '#1839d5', createdAt: '2026-10-19T12:00:00Z', startDate: '2026-10-19' };
 const rev = (schedule: Schedule, effectiveFrom = habit.startDate): Revision => ({ id: `revision-${effectiveFrom}`, habitId: habit.id, effectiveFrom, schedule });
 const done = (...days: string[]): Completion[] => days.map(localDate => ({ id: `${habit.id}:${localDate}`, habitId: habit.id, localDate, timeZone: 'Europe/Budapest', createdAt: `${localDate}T12:00:00Z` }));
@@ -72,6 +72,70 @@ describe('streaks and weekly quotas', () => {
     const revisions = [rev({ type: 'weekly_target', targetCount: 2 }, '2026-10-12'), rev({ type: 'weekly_target', targetCount: 3 }, '2026-10-22')];
     expect(weekInfo(h, revisions, done('2026-10-13', '2026-10-15'), '2026-10-12', '2026-10-26')).toMatchObject({ target: 2, state: 'completed' });
     expect(weekInfo(h, revisions, [], '2026-10-19', '2026-10-26')).toMatchObject({ target: 3, partial: true, state: 'partial' });
+  });
+});
+describe('pausing and resuming habits', () => {
+  it('pauses immediately and resumes on the chosen day without a missed date or broken streak', () => {
+    const revisions = [rev({ type: 'daily' })];
+    const paused = pauseHabit(habit, '2026-10-21');
+    expect(pauseHabit(paused, '2026-10-22')).toBe(paused);
+    const resumed = resumeHabit(paused, '2026-10-24');
+    expect(resumed.pauses).toEqual([{ from: '2026-10-21', until: '2026-10-24' }]);
+    expect(resumeHabit(resumed, '2026-10-25')).toBe(resumed);
+    expect(activeOn(resumed, '2026-10-20')).toBe(true);
+    expect(activeOn(resumed, '2026-10-21')).toBe(false);
+    expect(dayState(resumed, revisions, [], '2026-10-23', '2026-10-24')).toBe('not_scheduled');
+    expect(dayState(resumed, revisions, [], '2026-10-24', '2026-10-24')).toBe('due');
+    expect(habitStats(resumed, revisions, done('2026-10-19', '2026-10-20', '2026-10-24'), '2026-10-24')).toMatchObject({ current: 3, best: 3 });
+  });
+  it('cancels a same-day pause and lets future habits remain paused after their start date', () => {
+    const day = '2026-10-17';
+    const paused = pauseHabit(habit, day);
+    expect(resumeHabit(paused, day)).toEqual(habit);
+    expect(pausedOn(paused, day)).toBe(true);
+    expect(activeOn(paused, habit.startDate)).toBe(false);
+    const resumed = resumeHabit(paused, '2026-10-18');
+    expect(activeOn(resumed, '2026-10-18')).toBe(false);
+    expect(activeOn(resumed, habit.startDate)).toBe(true);
+  });
+  it('keeps a recorded completion and lets it be removed while blocking new completions on paused days', () => {
+    const pauseDay = '2026-10-20', later = '2026-10-22';
+    const paused = pauseHabit(habit, pauseDay);
+    const state = { ...snapshot(), habits: [paused], completions: done('2026-10-19', pauseDay) };
+    expect(dayState(paused, state.revisions, state.completions, pauseDay, later)).toBe('completed');
+    expect(habitStats(paused, state.revisions, state.completions, later)).toMatchObject({ current: 2, best: 2, total: 2 });
+    const corrected = toggleCompletion(state, habit.id, pauseDay, later);
+    expect(xpOf(corrected.completions)).toBe(10);
+    expect(dayState(paused, state.revisions, corrected.completions, pauseDay, later)).toBe('not_scheduled');
+    expect(() => toggleCompletion(corrected, habit.id, pauseDay, later)).toThrow('not scheduled');
+    expect(() => toggleCompletion(corrected, habit.id, later, later)).toThrow('not scheduled');
+  });
+  it('skips weeks within a pause and closes an unfinished boundary week without a miss', () => {
+    const olderHabit = { ...habit, startDate: '2026-10-12' };
+    const paused = pauseHabit(olderHabit, '2026-10-21');
+    const revisions = [rev({ type: 'weekly_target', targetCount: 2 }, olderHabit.startDate)];
+    const records = done('2026-10-12', '2026-10-13', '2026-10-20');
+    expect(weekInfo(paused, revisions, records, '2026-10-19', '2026-10-20').state).toBe('due');
+    expect(weekInfo(paused, revisions, records, '2026-10-19', '2026-10-21')).toMatchObject({ count: 1, target: 2, state: 'partial', partial: true });
+    expect(weekInfo(paused, revisions, records, '2026-10-26', '2026-10-31').state).toBe('not_scheduled');
+    const resumed = resumeHabit(paused, '2026-11-04');
+    expect(weekInfo(resumed, revisions, records, '2026-11-02', '2026-11-04')).toMatchObject({ state: 'due', partial: true });
+    expect(habitStats(resumed, revisions, records, '2026-11-09')).toMatchObject({ current: 1, best: 1 });
+  });
+  it('includes a completion made on the first day of a weekly pause even when it is the only day with a record', () => {
+    const paused = pauseHabit(habit, '2026-10-19');
+    const revisions = [rev({ type: 'weekly_target', targetCount: 1 })];
+    const records = done('2026-10-19');
+    expect(weekInfo(paused, revisions, records, '2026-10-19', '2026-10-21')).toMatchObject({ count: 1, target: 1, state: 'completed', partial: true, completionDates: ['2026-10-19'] });
+    expect(habitStats(paused, revisions, records, '2026-10-26')).toMatchObject({ current: 1, best: 1, total: 1 });
+  });
+  it('leaves a later pause intact if another pause is started after the local date moves backward', () => {
+    const later = pauseHabit(habit, '2026-10-25');
+    const earlier = pauseHabit(later, '2026-10-23');
+    expect(earlier.pauses).toEqual([{ from: '2026-10-23', until: '2026-10-25' }, { from: '2026-10-25' }]);
+    const resumed = resumeHabit(earlier, '2026-10-24');
+    expect(pausedOn(resumed, '2026-10-24')).toBe(false);
+    expect(pausedOn(resumed, '2026-10-25')).toBe(true);
   });
 });
 describe('completion and rewards', () => {
