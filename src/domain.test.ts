@@ -1,9 +1,39 @@
 import { describe, expect, it } from 'vitest';
-import { type Habit, type Revision, type Completion, type Schedule, type Snapshot, EMPTY, STAGES, activeOn, addDays, monday, weekday, dayState, habitStats, weekInfo, xpOf, stageOf, toggleCompletion, demoSnapshot, revisionAt, pauseHabit, pausedOn, resumeHabit } from './domain';
+import { type Habit, type Revision, type Completion, type Schedule, type Snapshot, EMPTY, STAGES, activeOn, addDays, monday, weekday, dayState, habitStats, plannedProgress, weekInfo, xpOf, stageOf, toggleCompletion, demoSnapshot, revisionAt, pauseHabit, pausedOn, resumeHabit } from './domain';
 const habit: Habit = { id: 'read', title: 'Read', icon: 'book', color: '#1839d5', createdAt: '2026-10-19T12:00:00Z', startDate: '2026-10-19' };
 const rev = (schedule: Schedule, effectiveFrom = habit.startDate): Revision => ({ id: `revision-${effectiveFrom}`, habitId: habit.id, effectiveFrom, schedule });
 const done = (...days: string[]): Completion[] => days.map(localDate => ({ id: `${habit.id}:${localDate}`, habitId: habit.id, localDate, timeZone: 'Europe/Budapest', createdAt: `${localDate}T12:00:00Z` }));
 const snapshot = (schedule: Schedule = { type: 'daily' }): Snapshot => ({ ...EMPTY, settings: { ...EMPTY.settings }, habits: [habit], revisions: [rev(schedule)], completions: [] });
+
+describe('planned progress', () => {
+  it('counts scheduled dates in the window, uses their original schedule and omits pauses', () => {
+    const paused = { ...habit, pauses: [{ from: '2026-10-21', until: '2026-10-23' }] };
+    const revisions = [rev({ type: 'daily' }), rev({ type: 'weekdays', days: [5, 7] }, '2026-10-23')];
+    const records = done('2026-10-19', '2026-10-21', '2026-10-23', '2026-10-25', '2026-10-30');
+    expect(plannedProgress(paused, revisions, records, '2026-10-20', '2026-10-25')).toEqual({ completed: 2, planned: 3 });
+  });
+
+  it('respects the interval anchor, start and archive boundaries', () => {
+    const archived = { ...habit, archivedOn: '2026-10-26' };
+    const revisions = [rev({ type: 'interval', everyNDays: 3, anchorDate: '2026-10-19' })];
+    expect(plannedProgress(archived, revisions, done('2026-10-19', '2026-10-22'), '2026-10-01', '2026-10-31')).toEqual({ completed: 2, planned: 3 });
+    expect(plannedProgress(archived, revisions, [], '2026-10-26', '2026-11-22')).toEqual({ completed: 0, planned: 0 });
+  });
+
+  it('counts one weekly quota, caps extra completions and omits fully paused weeks', () => {
+    const paused = { ...habit, pauses: [{ from: '2026-10-26', until: '2026-11-07' }] };
+    const revisions = [rev({ type: 'weekly_target', targetCount: 3 })];
+    const records = done('2026-10-20', '2026-10-21', '2026-10-21', '2026-10-23', '2026-10-24', '2026-11-03', '2026-11-07', '2026-11-08');
+    expect(plannedProgress(paused, revisions, records, '2026-10-12', '2026-11-07')).toEqual({ completed: 4, planned: 4 });
+  });
+
+  it('uses earlier entries toward a revised weekly quota and accounts for completions before a partial first week', () => {
+    const revisions = [rev({ type: 'weekly_target', targetCount: 2 }), rev({ type: 'weekly_target', targetCount: 3 }, '2026-10-23')];
+    const records = done('2026-10-19', '2026-10-21', '2026-10-24', '2026-10-25');
+    expect(plannedProgress(habit, revisions, records, '2026-10-20', '2026-10-25')).toEqual({ completed: 2, planned: 2 });
+  });
+});
+
 describe('calendar dates and schedule states', () => {
   it('moves by calendar dates over both daylight-saving transitions', () => {
     expect(addDays('2026-03-28', 1)).toBe('2026-03-29'); expect(addDays('2026-03-29', 1)).toBe('2026-03-30');
