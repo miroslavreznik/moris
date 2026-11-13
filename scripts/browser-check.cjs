@@ -20,7 +20,16 @@ const waitReady = async page => { await page.evaluate(async () => { await naviga
   await demo.getByRole('heading', { name: /Show up/ }).waitFor();
   await demo.screenshot({ path: path.join(output, 'today-mobile.png'), fullPage: true });
   await nav(demo, 'Progress');
-  await demo.locator('.goal-overview').filter({ hasText: 'Read a few pages' }).click();
+  const overviewCards = demo.locator('.goal-overview');
+  const readingCard = overviewCards.filter({ hasText: 'Read a few pages' });
+  await readingCard.getByText(/\d+ of \d+ planned opportunities completed/).waitFor();
+  for (const card of await overviewCards.all()) {
+    assert.doesNotMatch(await card.innerText(), /\bin a row\b|\bstreak\b|\bpersonal best\b/i);
+  }
+  await readingCard.click();
+  await demo.getByText('Current streak', { exact: true }).waitFor();
+  await demo.getByText('Personal best', { exact: true }).waitFor();
+  ok('the Progress overview shows recent planned opportunities, with streaks in the habit detail');
   await demo.locator('.calendar-grid').waitFor();
   assert.equal(await demo.locator('.calendar-grid .cell').count(), 35);
   await demo.screenshot({ path: path.join(output, 'goal-progress-mobile.png'), fullPage: true });
@@ -231,6 +240,7 @@ const waitReady = async page => { await page.evaluate(async () => { await naviga
   await nav(midnight, 'Progress');
   const readingProgress = midnight.locator('.goal-overview').filter({ hasText: 'Read a few pages' });
   assert.match(await readingProgress.innerText(), /\bPaused\b/);
+  await readingProgress.getByText('1 of 2 planned opportunities completed', { exact: true }).waitFor();
   await nav(midnight, 'Settings');
   await resume.click();
   await midnight.getByRole('button', { name: 'Pause Read a few pages', exact: true }).waitFor();
@@ -238,6 +248,9 @@ const waitReady = async page => { await page.evaluate(async () => { await naviga
   await nav(midnight, 'Today');
   await completeRead.waitFor();
   await midnight.getByText('10 XP', { exact: true }).first().waitFor();
+  await nav(midnight, 'Progress');
+  await readingProgress.getByText('1 of 3 planned opportunities completed', { exact: true }).waitFor();
+  await nav(midnight, 'Today');
   await midnight.getByRole('button', { name: 'View history for Read a few pages', exact: true }).click();
   const readingCalendar = midnight.locator('.calendar-grid');
   await readingCalendar.getByRole('button', { name: /October 26, 2026: Completed$/ }).waitFor();
@@ -246,7 +259,13 @@ const waitReady = async page => { await page.evaluate(async () => { await naviga
     await paused.waitFor();
     assert(await paused.isDisabled());
   }
-  ok('pausing and resuming preserves earlier completion and XP, and paused dates stay out of misses');
+  ok('pausing and resuming preserves completion and XP, and paused dates are omitted from planned opportunities');
+
+  await midnight.clock.setFixedTime(new Date('2026-11-23T12:00:00+01:00'));
+  await midnight.reload();
+  await nav(midnight, 'Progress');
+  await readingProgress.getByText('0 of 25 planned opportunities completed', { exact: true }).waitFor();
+  ok('the four-week summary drops older completions and excludes paused days from its denominator');
   await browser.close();
   assert.deepEqual(errors, [], 'browser runtime errors');
   console.log(`${checks.length} browser checks passed. Screenshots: ${output}`);

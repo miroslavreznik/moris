@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpFromLine, BookOpen, Check, ChevronLeft, ChevronRight, CircleHelp, Coffee, Footprints, Heart, History, House, Menu, MoreHorizontal, Pencil, Plus, RefreshCw, Settings2, Share, Sparkles, Sun, Volume2, WifiOff, X, Zap, Dumbbell } from 'lucide-react';
 import { registerSW } from 'virtual:pwa-register';
-import { type Completion, type Day, type Habit, type OneOffPlan, type Revision, type Schedule, type Snapshot, ICONS, COLORS, STAGES, MAX_TITLE_LENGTH, isDay, today, addDays, monday, dates, formatDay, revisionAt, dayState, weekInfo, habitStats, scheduleLabel, xpOf, stageOf, toggleCompletion, uid, scheduled, activeOn, completedOn, pausedOn, pauseHabit, resumeHabit } from './domain';
+import { type Completion, type Day, type Habit, type OneOffPlan, type Revision, type Schedule, type Snapshot, ICONS, COLORS, STAGES, MAX_TITLE_LENGTH, isDay, today, addDays, monday, dates, formatDay, revisionAt, dayState, weekInfo, habitStats, plannedProgress, scheduleLabel, xpOf, stageOf, toggleCompletion, uid, scheduled, activeOn, completedOn, pausedOn, pauseHabit, resumeHabit } from './domain';
 import { downloadBackup, parseBackup, backupOf } from './backup';
 import { db, isDemo } from './storage';
 import { change, useStore, writesFinished } from './store';
@@ -188,12 +188,34 @@ function Progress({ data, now, selected, select, edit, correct }: { data: Snapsh
   const [showArchived, setShowArchived] = useState(false);
   const habit = data.habits.find(h => h.id === selected);
   useEffect(() => setOffset(0), [selected]);
-  const visible = data.habits.filter(h => showArchived || !h.archivedAt);
-  if (!habit) return <><PageTitle kicker="YOUR LITTLE THINGS, ADDING UP" title="A record of showing up." description="A separate story for every goal. Gaps and all." /><div className="progress-toolbar"><span>{visible.length} {visible.length === 1 ? 'habit' : 'habits'}</span><label className="small-check"><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />Show archived</label></div>{!visible.length ? <Empty title="Your first mark is waiting." text="Add a habit from Today and its own progress story will appear here." /> : <div className="goal-overviews">{visible.map(h => {
-    const stats = habitStats(h, data.revisions, data.completions, now), schedule = revisionAt(data.revisions, h.id, now)?.schedule;
-    const weekly = schedule?.type === 'weekly_target', week = weekly ? weekInfo(h, data.revisions, data.completions, monday(now), now) : null;
-    return <button key={h.id} className="goal-overview" onClick={() => select(h.id)} style={{ '--habit-color': h.color } as React.CSSProperties}><div className="goal-overview-heading"><Icon name={h.icon} size={20} /><h2>{h.title}</h2><ArrowRight size={18} /></div><span className="goal-schedule">{h.archivedAt ? 'Archived · ' : pausedOn(h, now) ? 'Paused · ' : ''}{schedule && scheduleLabel(schedule)}</span>{week && !pausedOn(h, now) ? <><div className="quota-line"><strong>{week.count}<span>/{week.target}</span></strong><span>This week{week.partial ? ' · partial start' : ''}</span></div><div className="quota-meter"><i style={{ width: `${Math.min(100, week.count / week.target * 100)}%` }} /></div></> : <div className="overview-cells">{dates(addDays(now, -13), now).map(day => { const state = dayState(h, data.revisions, data.completions, day, now); return <span className={`cell ${state}`} key={day} aria-label={`${formatDay(day)}: ${habitDayLabel(h, day, state)}`}>{state === 'completed' ? '✓' : state === 'not_scheduled' ? '—' : '·'}</span>; })}</div>}<div className="goal-summary"><span><b>{stats.current}</b> {weekly ? 'week streak' : 'in a row'}</span><span><b>{stats.total}</b> total completions</span></div></button>;
-  })}</div>}<p className="page-footnote">A blank unscheduled day is a rest day, not a failure.</p></>;
+  if (!habit) {
+    const visible = data.habits.filter(item => showArchived || !item.archivedAt);
+    const from = addDays(now, -27);
+    return <>
+      <PageTitle kicker="YOUR LITTLE THINGS, ADDING UP" title="A record of showing up." description={`Last 4 weeks · ${formatDay(from)} – ${formatDay(now)}`} />
+      <div className="progress-toolbar">
+        <span>{visible.length} {visible.length === 1 ? 'habit' : 'habits'}</span>
+        <label className="small-check"><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />Show archived</label>
+      </div>
+      {!visible.length ? <Empty title="Your first mark is waiting." text="Add a habit from Today and its own progress story will appear here." /> : <>
+        <div className="goal-overviews">{visible.map(item => {
+          const { completed, planned } = plannedProgress(item, data.revisions, data.completions, from, now);
+          const schedule = revisionAt(data.revisions, item.id, now)?.schedule;
+          const status = item.archivedAt ? 'Archived' : pausedOn(item, now) ? 'Paused' : '';
+          const subtitle = [status, schedule && scheduleLabel(schedule)].filter(Boolean).join(' · ');
+          return <button type="button" key={item.id} className="goal-overview" onClick={() => select(item.id)} style={{ '--habit-color': item.color } as React.CSSProperties}>
+            <div className="goal-overview-heading"><Icon name={item.icon} size={20} /><h2>{item.title}</h2><ArrowRight size={18} aria-hidden="true" /></div>
+            {subtitle && <span className="goal-schedule">{subtitle}</span>}
+            <p className="progress-result">{planned > 0 ? <>
+              <strong>{completed} of {planned}</strong> planned {planned === 1 ? 'opportunity' : 'opportunities'} completed
+            </> : 'No planned opportunities in this period'}</p>
+            {planned > 0 && <div className="quota-meter" aria-hidden="true"><i style={{ width: `${completed / planned * 100}%` }} /></div>}
+          </button>;
+        })}</div>
+        <p className="page-footnote">Pause days are excluded. Weekly goals count up to their target, based on available days in this period.</p>
+      </>}
+    </>;
+  }
   const stats = habitStats(habit, data.revisions, data.completions, now), schedule = revisionAt(data.revisions, habit.id, now)?.schedule;
   const weekly = schedule?.type === 'weekly_target';
   const end = addDays(monday(now), 6 + offset * 7), start = addDays(end, -34);

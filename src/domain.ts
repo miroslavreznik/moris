@@ -133,6 +133,46 @@ export function habitStats(habit: Habit, revisions: Revision[], completions: Com
   for (const event of events) { if (event.done) { run++; best = Math.max(best, run); } else if (!event.open) run = 0; }
   return { current: run, best, unit: type === 'weekly_target' ? 'weeks' : 'scheduled completions', total };
 }
+
+export function plannedProgress(habit: Habit, revisions: Revision[], completions: Completion[], from: Day, through: Day) {
+  const recorded = new Set(completions.filter(entry => entry.habitId === habit.id).map(entry => entry.localDate));
+  const weekly = new Map<Day, { target: number; available: number; completed: number; completedBefore: number }>();
+  let planned = 0;
+  let completed = 0;
+
+  for (const day of dates(monday(from), through)) {
+    if (!activeOn(habit, day)) continue;
+    const revision = revisionAt(revisions, habit.id, day);
+    if (!revision || !scheduled(revision.schedule, day)) continue;
+    const done = Number(recorded.has(day));
+    if (revision.schedule.type !== 'weekly_target') {
+      if (day < from) continue;
+      planned++;
+      completed += done;
+      continue;
+    }
+
+    const week = monday(day);
+    const quota = weekly.get(week) ?? { target: 0, available: 0, completed: 0, completedBefore: 0 };
+    // Apply one quota per calendar week. A revision can change it without erasing earlier entries.
+    quota.target = revision.schedule.targetCount;
+    if (day < from) quota.completedBefore += done;
+    else {
+      quota.available++;
+      quota.completed += done;
+    }
+    weekly.set(week, quota);
+  }
+
+  for (const quota of weekly.values()) {
+    // A completion outside the window can already have filled part of its first week's quota.
+    const opportunities = Math.min(Math.max(0, quota.target - quota.completedBefore), quota.available);
+    planned += opportunities;
+    completed += Math.min(quota.completed, opportunities);
+  }
+  return { completed, planned };
+}
+
 export function scheduleLabel(schedule: Schedule): string {
   switch (schedule.type) {
     case 'daily': return 'Every day';
