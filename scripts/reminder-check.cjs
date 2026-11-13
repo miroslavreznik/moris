@@ -45,19 +45,38 @@ const base = process.env.MORIS_TEST_URL || 'http://127.0.0.1:4173';
     await page.setViewportSize({ width: 320, height: 800 });
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     await page.screenshot({ path: 'test-results/reminders-settings-mobile.png', fullPage: true });
+    const waitForEligibility = needed => page.waitForResponse(response => {
+      const request = response.request();
+      return response.ok() && request.url().endsWith('/api/reminders/subscription') &&
+        request.postDataJSON()?.days?.every(day => day.needed === needed);
+    });
+    await Promise.all([
+      waitForEligibility(false),
+      page.getByRole('button', { name: 'Pause A private daily goal', exact: true }).click(),
+    ]);
+    await Promise.all([
+      waitForEligibility(true),
+      page.getByRole('button', { name: 'Resume A private daily goal', exact: true }).click(),
+    ]);
+    console.log('PASS pausing the only habit suppresses evening reminders and resuming restores eligibility');
     await page.locator('.bottom-nav').getByRole('button', { name: 'Today', exact: true }).click();
     await context.setOffline(true);
     await page.getByRole('button', { name: 'Complete A private daily goal today', exact: true }).click();
     await page.getByRole('button', { name: 'Undo A private daily goal today', exact: true }).waitFor();
-    await context.setOffline(false);
-    await page.waitForResponse(response => response.url().endsWith('/api/reminders/subscription') && response.ok());
+    await Promise.all([
+      page.waitForResponse(response => response.url().endsWith('/api/reminders/subscription') && response.ok()),
+      context.setOffline(false),
+    ]);
     await page.waitForTimeout(400);
     assert.equal(synced.at(-1).days[0].needed, false);
     console.log('PASS an offline completion suppresses the reminder once the connection returns');
     await page.getByRole('button', { name: 'Undo A private daily goal today', exact: true }).click();
     await page.getByRole('button', { name: 'A moment for today & tomorrow', exact: true }).click();
-    await page.getByRole('button', { name: 'That’s enough for today', exact: true }).click();
-    await page.waitForResponse(response => response.url().endsWith('/api/reminders/subscription') && response.ok());
+    await Promise.all([
+      page.waitForResponse(response => response.ok() && response.url().endsWith('/api/reminders/subscription') &&
+        response.request().postDataJSON()?.days?.[0]?.needed === false),
+      page.getByRole('button', { name: 'That’s enough for today', exact: true }).click(),
+    ]);
     await page.waitForTimeout(400);
     assert.equal(synced.at(-1).days[0].needed, false);
     await page.getByRole('button', { name: 'Complete A private daily goal today', exact: true }).waitFor();

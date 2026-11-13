@@ -43,4 +43,10 @@ describe('gentle reminder eligibility', () => {
     ]);
     expect(reminderPlan(data, '2026-11-05', '2026-11-05').some(day => day.needed)).toBe(false);
   });
+  it('skips pause dates and includes the first scheduled day after resuming', () => {
+    const data = sample();
+    data.habits[0].pauses = [{ from: '2026-11-05', until: '2026-11-07' }];
+
+    expect(reminderPlan(data, '2026-11-04').slice(0, 4).map(day => day.needed)).toEqual([true, false, false, true]);
+  });
 });

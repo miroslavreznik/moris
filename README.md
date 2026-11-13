@@ -34,6 +34,7 @@ The production preview is normally at `http://localhost:4173`. The development s
 ## What is implemented
 
 - English onboarding with suggested/custom habits and configurable schedules.
+- Start with one new habit or add more. Pause and resume habits from Settings. Paused dates are skipped and past entries and XP stay available in Progress.
 - Create, edit, and archive habits; archiving retains history and XP.
 - Daily, interval, selected-weekday, and flexible weekly-target schedules.
 - Immediate one-tap completion, undo, a seven-day strip on Today, and local persistence.
@@ -72,7 +73,7 @@ Browser artifacts are written to ignored `test-results/`. See `docs/qa.md` for v
 
 `src/domain.ts` contains calendar-date scheduling, revision-aware history, streaks, and rewards independently of React. Date arithmetic uses calendar dates in UTC; recorded local dates and their time zones stay fixed when the device travels. A Monday–Sunday quota counts distinct completion dates. Open days/weeks do not prematurely break streaks.
 
-`src/storage.ts` declares IndexedDB version 1. Future database changes must add a version and migration, never delete the database during app updates. `src/store.ts` serializes writes while keeping UI feedback immediate. A storage failure reloads durable records and reports the failure.
+`src/storage.ts` declares IndexedDB version 2. Pause intervals are stored on habit records. Backups use version 3 and can still read versions 1 and 2. `src/store.ts` serializes writes while keeping UI feedback immediate. A storage failure reloads durable records and reports the failure.
 
 Habits remain device-local, with **no habit account, automatic cloud backup, cross-device habit sync, paid subscription, or external analytics**. Opt-in browser push uses a small same-origin server storing delivery details and date/boolean eligibility only; see `docs/reminders.md`. Clearing browser data or losing the device can lose records. Export backups regularly; demo data is illustrative.
 

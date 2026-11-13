@@ -54,6 +54,7 @@ const waitReady = async page => { await page.evaluate(async () => { await naviga
   realContext.on('page', page => page.on('pageerror', e => errors.push(e.message)));
   const page = await realContext.newPage();
   await page.goto(base);
+  await page.getByText('Start with one new habit.', { exact: true }).waitFor();
   await page.getByRole('checkbox', { name: 'Read a few pages', exact: true }).check();
   await page.getByRole('checkbox', { name: 'Move your body', exact: true }).check();
   await page.getByRole('button', { name: "Let's begin with 2", exact: true }).click();
@@ -92,6 +93,7 @@ const waitReady = async page => { await page.evaluate(async () => { await naviga
   await page.getByText('10 XP', { exact: true }).first().waitFor();
   ok('weekly habit titles also record today; Space and Enter toggle the same action without duplicate XP');
   await page.getByRole('button', { name: 'Add habit', exact: true }).click();
+  await page.getByRole('dialog').getByText('Start with one new habit.', { exact: true }).waitFor();
   await page.getByLabel('Habit name', { exact: true }).fill('Stretch for a minute');
   await page.getByRole('dialog').getByRole('button', { name: 'Add habit', exact: true }).click();
   await page.getByRole('button', { name: 'Complete Stretch for a minute today', exact: true }).waitFor();
@@ -110,7 +112,7 @@ const waitReady = async page => { await page.evaluate(async () => { await naviga
   const download = await downloadPromise;
   const backupPath = path.join(output, 'backup.json'); await download.saveAs(backupPath);
   const backupBytes = await readFile(backupPath), backup = JSON.parse(backupBytes);
-  assert.equal(backup.schemaVersion, 2); assert.deepEqual(backup.plans, []); assert.equal(backup.completions.length, 1); assert.equal(backup.habits.length, 3);
+  assert.equal(backup.schemaVersion, 3); assert.deepEqual(backup.plans, []); assert.equal(backup.completions.length, 1); assert.equal(backup.habits.length, 3);
   const localToday = await page.evaluate(() => { const day = new Date(); return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`; });
   assert.equal(backup.completions[0].localDate, localToday);
   const bad = structuredClone(backup); bad.completions[0].habitId = 'orphan';
@@ -209,6 +211,42 @@ const waitReady = async page => { await page.evaluate(async () => { await naviga
   const midnightFile = await midnightDownload; const midnightPath = path.join(output, 'midnight-backup.json'); await midnightFile.saveAs(midnightPath);
   assert.equal(JSON.parse(await readFile(midnightPath)).completions[0].localDate, '2026-10-26');
   ok('a completion immediately after midnight uses the new local date even before the dashboard timer refreshes');
+
+  await midnight.clock.setFixedTime(new Date('2026-10-27T12:00:00+01:00'));
+  await midnight.reload();
+  await nav(midnight, 'Settings');
+  await midnight.getByRole('button', { name: 'Pause Read a few pages', exact: true }).click();
+  const resume = midnight.getByRole('button', { name: 'Resume Read a few pages', exact: true });
+  await resume.waitFor();
+  await midnight.getByText('SAVED ON THIS DEVICE', { exact: true }).waitFor();
+  await nav(midnight, 'Today');
+  await midnight.getByRole('heading', { name: 'Paused habits', exact: true }).waitFor();
+  const completeRead = midnight.getByRole('button', { name: 'Complete Read a few pages today', exact: true });
+  assert.equal(await completeRead.count(), 0);
+  await midnight.getByText('10 XP', { exact: true }).first().waitFor();
+
+  await midnight.clock.setFixedTime(new Date('2026-10-30T12:00:00+01:00'));
+  await midnight.reload();
+  await midnight.getByRole('heading', { name: 'Paused habits', exact: true }).waitFor();
+  await nav(midnight, 'Progress');
+  const readingProgress = midnight.locator('.goal-overview').filter({ hasText: 'Read a few pages' });
+  assert.match(await readingProgress.innerText(), /\bPaused\b/);
+  await nav(midnight, 'Settings');
+  await resume.click();
+  await midnight.getByRole('button', { name: 'Pause Read a few pages', exact: true }).waitFor();
+  await midnight.getByText('SAVED ON THIS DEVICE', { exact: true }).waitFor();
+  await nav(midnight, 'Today');
+  await completeRead.waitFor();
+  await midnight.getByText('10 XP', { exact: true }).first().waitFor();
+  await midnight.getByRole('button', { name: 'View history for Read a few pages', exact: true }).click();
+  const readingCalendar = midnight.locator('.calendar-grid');
+  await readingCalendar.getByRole('button', { name: /October 26, 2026: Completed$/ }).waitFor();
+  for (const day of [27, 28, 29]) {
+    const paused = readingCalendar.getByRole('button', { name: new RegExp(`October ${day}, 2026: Paused$`) });
+    await paused.waitFor();
+    assert(await paused.isDisabled());
+  }
+  ok('pausing and resuming preserves earlier completion and XP, and paused dates stay out of misses');
   await browser.close();
   assert.deepEqual(errors, [], 'browser runtime errors');
   console.log(`${checks.length} browser checks passed. Screenshots: ${output}`);

@@ -52,7 +52,7 @@ describe('IndexedDB persistence and safety', () => {
     await saveDelta(EMPTY, sample, db);
     await replaceWithBackup(sample, restored, db);
     expect(await loadSnapshot(db)).toEqual(restored);
-    expect((await db.meta.get('safety-backup'))?.value).toMatchObject({ schemaVersion: 2, habits: sample.habits, plans: sample.plans });
+    expect((await db.meta.get('safety-backup'))?.value).toMatchObject({ schemaVersion: 3, habits: sample.habits, plans: sample.plans });
   });
   it('rolls a failed restore back, keeping both current records and the previous safety backup', async () => {
     const db = fresh(), sample = { ...demoSnapshot('2026-10-25'), plans: [plan] };

@@ -9,3 +9,16 @@
 @media(max-width:740px){.next-evolution{padding:17px;gap:14px}.next-evolution h2{font-size:27px}.next-evolution .eyebrow{font-size:8px;letter-spacing:.3px}.next-evolution>strong{font-size:9px}.next-evolution p:not(.eyebrow){font-size:11px}}
 @media(max-width:360px){.next-evolution{grid-template-columns:minmax(0,1fr) auto;padding:14px;gap:12px}.next-evolution>strong{grid-column:1/-1}.next-evolution h2{font-size:25px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+
+
+.focus-advice { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.focus-advice strong { color: var(--ink); }
+.welcome .focus-advice { margin: 8px 0 14px; }
+.paused-habits { margin-top: 28px; }
+.paused-habits ul { list-style: none; margin: 0; padding: 0; }
+.paused-habits li { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--line); }
+.paused-habit-history { min-width: 0; text-align: left; }
+.paused-habit-history span { overflow-wrap: anywhere; }
+.habit-management-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.habit-management-actions .icon-button { width: 32px; }
+.manage-habit > span { overflow-wrap: anywhere; }

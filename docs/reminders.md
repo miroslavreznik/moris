@@ -39,7 +39,7 @@ it. Neither backup files nor device control tokens are published with the code.
 
 - Enable explicitly in Settings; never request permission on launch.
 - One reminder per installation around **19:30 Europe/Budapest**, including DST.
-- Skip complete days, rest days, archived goals and days explicitly closed in the
+- Skip complete days, rest days, paused or archived goals and days explicitly closed in the
   evening review. A flexible weekly quota is considered only on Sunday and only
   if unfinished, with no entry already recorded that day.
 - The evening review is also available from Today. Tap a recorded habit again to
