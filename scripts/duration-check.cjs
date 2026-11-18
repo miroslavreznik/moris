@@ -91,7 +91,7 @@ async function addHabit(page, title, repeat, duration) {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
   const backup = await exportBackup(page, 'habit-duration-backup.json');
-  assert.equal(backup.schemaVersion, 4);
+  assert.equal(backup.schemaVersion, 6);
   const endDates = Object.fromEntries(backup.habits.map(habit => [habit.title, habit.endDate ?? null]));
   assert.deepEqual(endDates, {
     'Move your body': '2027-02-17', 'Daily reading': '2026-11-24',

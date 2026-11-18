@@ -3,7 +3,7 @@ import { ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpFromLine, BookOpen, Chec
 import { registerSW } from 'virtual:pwa-register';
 import { type Completion, type Day, type Habit, type OneOffPlan, type Revision, type Schedule, type Snapshot, ICONS, COLORS, COLOR_NAMES, STAGES, MAX_TITLE_LENGTH, isDay, today, addDays, monday, dates, formatDay, revisionAt, dayState, weekInfo, habitStats, plannedProgress, scheduleLabel, xpOf, stageOf, toggleCompletion, uid, scheduled, activeOn, completedOn, pausedOn, endedOn, pauseHabit, resumeHabit } from './domain';
 import { downloadBackup, parseBackup, backupOf } from './backup';
-import { db, isDemo } from './storage';
+import { db, isDemo, isEvolutionLab } from './storage';
 import { change, useStore, writesFinished } from './store';
 import { Moris, type MorisMotion } from './Moris';
 import { CompanionEditor } from './CompanionEditor';
@@ -12,6 +12,12 @@ import { DEFAULT_APPEARANCE, type Appearance } from './appearance';
 import { useReminders, ReminderSettings } from './reminders';
 import { remainingForReminder } from './reminder-plan';
 import { HabitDurationFields, HabitResearch, durationEndDate, type HabitDuration } from './HabitDurationFields';
+import { chooseEvolution, evolutionForm, evolutionLabel, nextEvolutionStage, selectedEvolutionLine, type EvolutionBranch, type EvolutionForm } from './evolution';
+import { EvolutionChooser } from './EvolutionChooser';
+import { MorisJourney } from './MorisJourney';
+import { EvolutionLab } from './EvolutionLab';
+import { createEvolutionLabSnapshot } from './evolution-lab';
+import { lineageChange } from './moris-lineage';
 
 type Tab = 'Today' | 'Progress' | 'Moris' | 'Settings';
 type InstallEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
@@ -292,7 +298,7 @@ export default function App() {
   const [form, setForm] = useState<Habit | 'new' | null>(null);
   const [editingPlan, setEditingPlan] = useState<OneOffPlan | null>(null);
   const [evening, setEvening] = useState(() => new URLSearchParams(location.search).has('evening'));
-  const reminders = useReminders(data, loaded, pending);
+  const reminders = useReminders(data, loaded, pending, isEvolutionLab);
   useEffect(() => {
     const open = (event: MessageEvent) => { if (event.data?.type === 'OPEN_EVENING_REVIEW') setEvening(true); };
     navigator.serviceWorker?.addEventListener('message', open);
@@ -305,6 +311,12 @@ export default function App() {
   const openOptions = (habit: Habit) => setOptionsId(habit.id);
   const [imported, setImported] = useState<Snapshot | null>(null);
   const [celebration, setCelebration] = useState<number | null>(null);
+  const [queuedEvolution, setQueuedEvolution] = useState<{ stage: number; line: EvolutionBranch; epoch: number; fromForm: EvolutionForm } | null>(null);
+  const [choosing, setChoosing] = useState<number | null>(null);
+  const deferredKey = isEvolutionLab ? 'moris-lab-evolution-deferred' : 'moris-evolution-deferred';
+  const [deferredEvolution, setDeferredEvolution] = useState<number | null>(() => {
+    try { const value = sessionStorage.getItem(deferredKey); return value && /^[1-6]$/.test(value) ? Number(value) : null; } catch { return null; }
+  });
   const [notice, setNotice] = useState('');
   const [lastAction, setLastAction] = useState<{ habit: Habit; day: Day } | null>(null);
   const [happy, setHappy] = useState(false);
@@ -322,8 +334,10 @@ export default function App() {
   const updateRef = useRef<((reload?: boolean) => Promise<void>) | null>(null);
   const artTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const previousStage = useRef<number | null>(null);
-  const celebrationFrom = useRef(0);
+  const autoOffered = useRef(new Set<number>());
+  const celebrationFrom = useRef<EvolutionForm>({ stage: 0 });
+  const evolutionEpoch = useRef(0);
+  const autoCelebrating = useRef<{ stage: number; epoch: number } | null>(null);
   const animateMoris = useCallback((kind: MorisMotion) => {
     setMotion(current => ({ kind, key: current.key + 1 })); setHappy(kind !== 'idle' && kind !== 'still');
     if (artTimer.current) clearTimeout(artTimer.current);
@@ -334,6 +348,12 @@ export default function App() {
   }, [loaded, data.onboardingComplete, animateMoris]);
   useEffect(() => () => { if (artTimer.current) clearTimeout(artTimer.current); }, []);
   const points = xpOf(data.completions), stage = stageOf(points);
+  const currentForm = evolutionForm(data.settings, stage);
+  const selectedLine = selectedEvolutionLine(data.settings);
+  const latestEvolution = useRef({ stage, line: selectedLine });
+  latestEvolution.current = { stage, line: selectedLine };
+  const pendingEvolution = nextEvolutionStage(data.settings, stage);
+  const celebratedForm = celebration === null ? null : evolutionForm(data.settings, celebration);
   const report = (message: string) => { setNotice(message); if (noticeTimer.current) clearTimeout(noticeTimer.current); noticeTimer.current = setTimeout(() => { setNotice(''); setLastAction(null); }, 7000); };
   useEffect(() => {
     const refreshDate = () => setNow(today());
@@ -353,20 +373,96 @@ export default function App() {
     return () => { clearInterval(interval); document.removeEventListener('visibilitychange', visible); window.removeEventListener('online', connect); window.removeEventListener('offline', connect); window.removeEventListener('beforeinstallprompt', install); window.removeEventListener('appinstalled', installed); };
   }, []);
   useEffect(() => {
-    if (!loaded || evening) return;
-    if ((previousStage.current === null || stage > previousStage.current) && stage > data.settings.celebratedStage) {
-      celebrationFrom.current = previousStage.current ?? Math.min(stage - 1, Math.max(0, data.settings.celebratedStage));
-      setCelebration(stage);
-      void change(current => ({ ...current, settings: { ...current.settings, celebratedStage: stage } })).catch(() => {});
+    if (!loaded || !data.onboardingComplete || evening || choosing !== null || celebration !== null || form || editingPlan || archive || correction || customizing || optionHabit || imported || installHelp) return;
+    if (selectedLine && stage > data.settings.celebratedStage && !autoCelebrating.current) {
+      const task = { stage, epoch: evolutionEpoch.current };
+      const fromForm = evolutionForm(data.settings, Math.min(stage - 1, data.settings.celebratedStage));
+      autoCelebrating.current = task;
+      let applied = false;
+      void change(current => {
+        if (evolutionEpoch.current !== task.epoch || selectedEvolutionLine(current.settings) !== selectedLine || stageOf(xpOf(current.completions)) < stage) return current;
+        applied = true;
+        return { ...current, settings: { ...current.settings, celebratedStage: Math.max(current.settings.celebratedStage, stage) } };
+      }).then(() => {
+        if (applied && evolutionEpoch.current === task.epoch && latestEvolution.current.stage >= stage && latestEvolution.current.line === selectedLine) setQueuedEvolution({ ...task, line: selectedLine, fromForm });
+      })
+        .catch(cause => report(cause instanceof Error ? cause.message : 'Your evolution could not be saved.'))
+        .finally(() => { if (autoCelebrating.current === task) autoCelebrating.current = null; });
+      return;
     }
-    previousStage.current = stage;
-  }, [loaded, evening, stage, data.settings.celebratedStage]);
+    if (pendingEvolution !== null && deferredEvolution !== pendingEvolution && !autoOffered.current.has(pendingEvolution)) {
+      autoOffered.current.add(pendingEvolution);
+      setChoosing(pendingEvolution);
+    }
+  }, [loaded, data.onboardingComplete, evening, choosing, celebration, form, editingPlan, archive, correction, customizing, optionHabit, imported, installHelp, pendingEvolution, deferredEvolution, selectedLine, stage, data.settings.celebratedStage]);
+  useEffect(() => {
+    if (!queuedEvolution) return;
+    if (queuedEvolution.epoch !== evolutionEpoch.current || queuedEvolution.line !== selectedLine || stage < queuedEvolution.stage) {
+      setQueuedEvolution(null);
+      return;
+    }
+    // Persistence may finish after another dialog has opened. Keep the earned
+    // scene queued until that interaction ends instead of stacking focus traps.
+    if (!loaded || !data.onboardingComplete || evening || choosing !== null || celebration !== null || form || editingPlan || archive || correction || customizing || optionHabit || imported || installHelp) return;
+    celebrationFrom.current = queuedEvolution.fromForm;
+    setQueuedEvolution(null);
+    setCelebration(queuedEvolution.stage);
+  }, [queuedEvolution, loaded, data.onboardingComplete, evening, choosing, celebration, form, editingPlan, archive, correction, customizing, optionHabit, imported, installHelp, selectedLine, stage]);
+  function openEvolution(requested: number) {
+    if (selectedEvolutionLine(data.settings)) return;
+    const target = nextEvolutionStage(data.settings, stage) ?? requested;
+    if (target < 1 || target > stage) return;
+    setDeferredEvolution(null);
+    try { sessionStorage.removeItem(deferredKey); } catch {}
+    autoOffered.current.add(target);
+    setChoosing(target);
+  }
+  function postponeEvolution() {
+    evolutionEpoch.current++;
+    setQueuedEvolution(null);
+    if (choosing !== null) {
+      setDeferredEvolution(choosing);
+      try { sessionStorage.setItem(deferredKey, String(choosing)); } catch {}
+    }
+    setChoosing(null);
+  }
+  async function selectEvolution(branch: EvolutionBranch) {
+    if (choosing === null) return;
+    const target = choosing, unlocked = stage;
+    const epoch = ++evolutionEpoch.current;
+    setQueuedEvolution(null);
+    celebrationFrom.current = currentForm;
+    await change(current => ({ ...current, settings: { ...chooseEvolution(current.settings, target, branch, stageOf(xpOf(current.completions))), celebratedStage: Math.max(current.settings.celebratedStage, unlocked) } }));
+    if (evolutionEpoch.current !== epoch) return;
+    setLastAction(null); setChoosing(null); setDeferredEvolution(null);
+    try { sessionStorage.removeItem(deferredKey); } catch {}
+    setCelebration(unlocked);
+  }
+  async function setLabStage(target: number, reset = false, line?: EvolutionBranch) {
+    if (!isEvolutionLab) return;
+    evolutionEpoch.current++;
+    setQueuedEvolution(null);
+    setChoosing(null); setCelebration(null); setLastAction(null); setDeferredEvolution(null); autoOffered.current.clear();
+    try { sessionStorage.removeItem(deferredKey); } catch {}
+    try { await change(current => createEvolutionLabSnapshot(target, reset ? undefined : line
+      ? { ...current.settings, evolutionLine: line, evolutionChoices: target > 0 ? [{ stage: 1, branch: line }] : [], evolutionLegacyStage: 0, celebratedStage: target }
+      : { ...current.settings, celebratedStage: Math.max(target, current.settings.celebratedStage) })); }
+    catch (cause) { report((cause as Error).message); }
+  }
+  function replayLabEvolution() {
+    if (!isEvolutionLab || !selectedLine || stage < 1) return;
+    evolutionEpoch.current++;
+    setQueuedEvolution(null);
+    celebrationFrom.current = evolutionForm(data.settings, stage - 1);
+    setCelebration(stage);
+  }
   useEffect(() => { if (tab === 'Settings') void db.meta.get('safety-backup').then(row => { if (row) { try { setSafetyBackup(parseBackup(row.value)); } catch {} } }); }, [tab, data]);
   function go(next: Tab) { setTab(next); setSelected(null); window.scrollTo({ top: 0, behavior: 'instant' }); }
   function goal(id: string | null) { setSelected(id); setTab('Progress'); window.scrollTo({ top: 0, behavior: 'instant' }); }
   async function complete(habit: Habit, day: Day) {
     const actionToday = today(); if (actionToday !== now) setNow(actionToday);
     const wasDone = completedOn(data.completions, habit.id, day);
+    if (wasDone) { evolutionEpoch.current++; setQueuedEvolution(null); }
     try {
       let completedData = data;
       const job = change(current => { completedData = toggleCompletion(current, habit.id, day, actionToday); return completedData; });
@@ -419,7 +515,7 @@ export default function App() {
     } catch (cause) { report((cause as Error).message); }
   }
   async function importFile(file: File) { try { if (file.size > 20_000_000) throw new Error('Choose a backup smaller than 20 MB.'); setImported(parseBackup(JSON.parse(await file.text()))); } catch (e) { report(e instanceof SyntaxError ? 'That file is not valid JSON. Your current records are unchanged.' : (e as Error).message); } }
-  async function restore() { if (!imported) return; try { await writesFinished(); downloadBackup(data, 'moris-before-restore'); await change(() => imported, true); setSafetyBackup(data); setImported(null); setSelected(null); report('Backup restored. A safety copy of your previous data is also saved on this device.'); } catch (e) { report((e as Error).message); } }
+  async function restore() { if (!imported) return; evolutionEpoch.current++; setQueuedEvolution(null); try { await writesFinished(); downloadBackup(data, 'moris-before-restore'); await change(() => imported, true); setSafetyBackup(data); setImported(null); setSelected(null); setChoosing(null); setCelebration(null); setDeferredEvolution(null); autoOffered.current.clear(); try { sessionStorage.removeItem(deferredKey); } catch {} report('Backup restored. A safety copy of your previous data is also saved on this device.'); } catch (e) { report((e as Error).message); } }
   const pausedHabits = data.habits.filter(habit => !habit.archivedAt && !endedOn(habit, now) && pausedOn(habit, now));
   const activeHabits = data.habits.filter(habit => !habit.archivedAt && !endedOn(habit, now) && !pausedOn(habit, now));
   const relevant = activeHabits.filter(h => { const revision = revisionAt(data.revisions, h.id, now); return activeOn(h, now) && revision && scheduled(revision.schedule, now); });
@@ -432,11 +528,12 @@ export default function App() {
   return <div className={`app-shell ${!data.settings.animationsEnabled ? 'no-extra-motion' : ''}`}>
     {error && <div className="storage-error" role="alert"><strong>Your data needs attention.</strong><p>{error}</p><button onClick={() => downloadBackup(data)} className="outline-button">Export available records</button><button onClick={() => location.reload()} className="text-button">Reload</button></div>}
     {!data.onboardingComplete && !error ? <Onboarding now={now} report={report} /> : <>
-      <aside className="sidebar"><button className="desktop-brand" onClick={() => go('Today')}>moris<span>EVERY REPETITION CHANGES YOU.</span></button><nav aria-label="Main navigation">{(['Today', 'Progress', 'Moris', 'Settings'] as Tab[]).map(name => { const Glyph = tabIcons[name]; return <button key={name} aria-current={tab === name ? 'page' : undefined} onClick={() => go(name)}><Glyph size={20} /><span>{name}</span>{tab === name && <span className="nav-dot" aria-hidden="true">●</span>}</button>; })}</nav><div className="sidebar-pet"><Moris stage={stage} happy={happy} appearance={data.settings} motion={motion.kind} motionKey={motion.key} /><span>YOUR LITTLE WORK IN PROGRESS</span><strong>{STAGES[stage].name}</strong><p>{points} XP. Every little thing counts.</p></div><p className="sidebar-bottom">YOUR DEVICE. YOUR PACE.<br />NO ACCOUNT REQUIRED.</p></aside>
+      <aside className="sidebar"><button className="desktop-brand" onClick={() => go('Today')}>moris<span>EVERY REPETITION CHANGES YOU.</span></button><nav aria-label="Main navigation">{(['Today', 'Progress', 'Moris', 'Settings'] as Tab[]).map(name => { const Glyph = tabIcons[name]; return <button key={name} aria-current={tab === name ? 'page' : undefined} onClick={() => go(name)}><Glyph size={20} /><span>{name}</span>{tab === name && <span className="nav-dot" aria-hidden="true">●</span>}</button>; })}</nav><div className="sidebar-pet"><Moris {...currentForm} happy={happy} appearance={data.settings} motion={motion.kind} motionKey={motion.key} /><span>YOUR LITTLE WORK IN PROGRESS</span><strong>{evolutionLabel(currentForm.stage, currentForm.branch)}</strong><p>{points} XP. Every little thing counts.</p></div><p className="sidebar-bottom">YOUR DEVICE. YOUR PACE.<br />NO ACCOUNT REQUIRED.</p></aside>
       <div className="workspace"><header className="masthead"><button className="mobile-brand" onClick={() => go('Today')}>MORIS</button><span className="masthead-note">A LITTLE WORK IN PROGRESS</span><span className="masthead-date">{formatDay(now, { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}</span></header>
         {(isDemo || !online) && <div className="status-banner">{isDemo ? <><span>DEMO EDITION · Sample data, separate from your own habits.</span><a href={import.meta.env.BASE_URL}>Start your own</a></> : <><WifiOff size={15} />Offline. Your habits still work and save here.</>}</div>}
         <main id="main-content" tabIndex={-1} className={`main-content tab-${tab.toLowerCase()}`}>
-          {tab === 'Today' && <><section className="today-heading"><div><p className="eyebrow">ANOTHER DAY. A FEW LITTLE THINGS.</p><h1>Show up.<br /><span>Get a little stranger.</span></h1></div><div className={`today-moris ${happy ? 'reacting' : ''}`}><button className="companion-hello" aria-label="Say hello to Moris" onClick={() => animateMoris('greet')}><Moris stage={stage} happy={happy} appearance={data.settings} motion={motion.kind} motionKey={motion.key} />{happy && motion.kind !== 'greet' && <i className="companion-xp" key={motion.key} aria-hidden="true">+10 XP</i>}</button><span>{STAGES[stage].name.toUpperCase()}</span><span className="moris-moment">{motion.kind === 'greet' ? 'Good to see you.' : motion.kind === 'all-done' ? 'Your little wins add up.' : 'Your little work in progress.'}</span></div></section><button className="evolution-strip" onClick={() => go('Moris')} aria-label="See Moris evolution"><span>{STAGES[stage + 1] ? `${STAGES[stage + 1].xp - points} XP TO THE NEXT KIND OF WEIRD` : 'STILL GROWING. STILL WONDERFULLY YOU.'}</span><strong>{points} XP <ArrowRight size={15} /></strong><i><b style={{ width: `${STAGES[stage + 1] ? (points - STAGES[stage].xp) / (STAGES[stage + 1].xp - STAGES[stage].xp) * 100 : 100}%` }} /></i></button><section className="today-habits"><div className="section-heading"><h2>Today's little commitments.</h2><button className="text-button" onClick={() => setForm('new')}><Plus size={16} />Add habit</button></div><div className="daily-summary"><span>{fixed.length ? `${dueCount} OF ${fixed.length} SCHEDULED HABITS STAMPED` : 'NO FIXED-DAY HABITS DUE TODAY'}</span><span>ONE TAP. THAT'S IT.</span></div>{!activeHabits.length && !pausedHabits.length ? <Empty title={data.habits.some(h => !h.archivedAt && endedOn(h, now)) ? "A little chapter, kept." : "A blank page. A good place to start."} text={data.habits.some(h => !h.archivedAt && endedOn(h, now)) ? "Your planned periods have ended. Find their history in Progress, or start a new habit." : "Choose one small habit. We'll keep a place for every time you show up."}><button className="primary-button" onClick={() => setForm('new')}>{data.habits.length ? 'Add a habit' : 'Add your first habit'}<Plus size={18} /></button></Empty> : !fixed.length ? <div className="quiet-state"><Sun size={24} /><p>No fixed commitments today.<br />Your unscheduled days count as rest.</p></div> : <div className="ticket-list">{fixed.map((habit, index) => <HabitTicket key={habit.id} habit={habit} data={data} now={now} index={index} complete={(h) => void complete(h, today())} select={() => goal(habit.id)} options={openOptions} />)}</div>}</section>{flexible.length > 0 && <section className="flexible-section"><div className="section-heading"><h2>At your own pace.</h2><span>THIS WEEK / MON–SUN</span></div><p className="section-intro">A weekly goal. You choose the days.</p><div className="ticket-list">{flexible.map((habit, index) => <HabitTicket key={habit.id} habit={habit} data={data} now={now} index={fixed.length + index} complete={(h) => void complete(h, today())} select={() => goal(habit.id)} options={openOptions} />)}</div></section>}{activeHabits.length > relevant.length && <section className="not-today"><h2>Resting today. Still part of the plan.</h2>{activeHabits.filter(h => !relevant.includes(h)).map(h => <div className="habit-rest-row" key={h.id}><button type="button" className="rest-habit-history" onClick={() => goal(h.id)}><Icon name={h.icon} size={16} /><span>{h.title}</span><ArrowRight size={15} /></button><HabitOptionsButton habit={h} open={openOptions} /></div>)}</section>}{pausedHabits.length > 0 && <section className="paused-habits">
+          {isEvolutionLab && <EvolutionLab data={data} onSetStage={target => void setLabStage(target)} onReset={() => void setLabStage(0, true)} onChoose={openEvolution} onSetLine={line => void setLabStage(stage, false, line)} onCelebrate={replayLabEvolution} />}
+          {tab === 'Today' && <><section className="today-heading"><div><p className="eyebrow">ANOTHER DAY. A FEW LITTLE THINGS.</p><h1>Show up.<br /><span>Get a little stranger.</span></h1></div><div className={`today-moris ${happy ? 'reacting' : ''}`}><button className="companion-hello" aria-label="Say hello to Moris" onClick={() => animateMoris('greet')}><Moris {...currentForm} happy={happy} appearance={data.settings} motion={motion.kind} motionKey={motion.key} />{happy && motion.kind !== 'greet' && <i className="companion-xp" key={motion.key} aria-hidden="true">+10 XP</i>}</button><span>{evolutionLabel(currentForm.stage, currentForm.branch).toUpperCase()}</span><span className="moris-moment">{motion.kind === 'greet' ? 'Good to see you.' : motion.kind === 'all-done' ? 'Your little wins add up.' : 'Your little work in progress.'}</span></div></section><button className="evolution-strip" onClick={() => go('Moris')} aria-label="See Moris evolution"><span>{pendingEvolution !== null ? 'YOUR EVOLUTION LINE IS READY TO CHOOSE' : STAGES[stage + 1] ? `${STAGES[stage + 1].xp - points} XP TO THE NEXT KIND OF WEIRD` : 'STILL GROWING. STILL WONDERFULLY YOU.'}</span><strong>{points} XP <ArrowRight size={15} /></strong><i><b style={{ width: `${STAGES[stage + 1] ? (points - STAGES[stage].xp) / (STAGES[stage + 1].xp - STAGES[stage].xp) * 100 : 100}%` }} /></i></button><section className="today-habits"><div className="section-heading"><h2>Today's little commitments.</h2><button className="text-button" onClick={() => setForm('new')}><Plus size={16} />Add habit</button></div><div className="daily-summary"><span>{fixed.length ? `${dueCount} OF ${fixed.length} SCHEDULED HABITS STAMPED` : 'NO FIXED-DAY HABITS DUE TODAY'}</span><span>ONE TAP. THAT'S IT.</span></div>{!activeHabits.length && !pausedHabits.length ? <Empty title={data.habits.some(h => !h.archivedAt && endedOn(h, now)) ? "A little chapter, kept." : "A blank page. A good place to start."} text={data.habits.some(h => !h.archivedAt && endedOn(h, now)) ? "Your planned periods have ended. Find their history in Progress, or start a new habit." : "Choose one small habit. We'll keep a place for every time you show up."}><button className="primary-button" onClick={() => setForm('new')}>{data.habits.length ? 'Add a habit' : 'Add your first habit'}<Plus size={18} /></button></Empty> : !fixed.length ? <div className="quiet-state"><Sun size={24} /><p>No fixed commitments today.<br />Your unscheduled days count as rest.</p></div> : <div className="ticket-list">{fixed.map((habit, index) => <HabitTicket key={habit.id} habit={habit} data={data} now={now} index={index} complete={(h) => void complete(h, today())} select={() => goal(habit.id)} options={openOptions} />)}</div>}</section>{flexible.length > 0 && <section className="flexible-section"><div className="section-heading"><h2>At your own pace.</h2><span>THIS WEEK / MON–SUN</span></div><p className="section-intro">A weekly goal. You choose the days.</p><div className="ticket-list">{flexible.map((habit, index) => <HabitTicket key={habit.id} habit={habit} data={data} now={now} index={fixed.length + index} complete={(h) => void complete(h, today())} select={() => goal(habit.id)} options={openOptions} />)}</div></section>}{activeHabits.length > relevant.length && <section className="not-today"><h2>Resting today. Still part of the plan.</h2>{activeHabits.filter(h => !relevant.includes(h)).map(h => <div className="habit-rest-row" key={h.id}><button type="button" className="rest-habit-history" onClick={() => goal(h.id)}><Icon name={h.icon} size={16} /><span>{h.title}</span><ArrowRight size={15} /></button><HabitOptionsButton habit={h} open={openOptions} /></div>)}</section>}{pausedHabits.length > 0 && <section className="paused-habits">
             <div className="section-heading"><h2>Paused habits</h2></div>
             <ul>{pausedHabits.map(habit => <li key={habit.id}>
               <button type="button" className="text-button paused-habit-history" onClick={() => goal(habit.id)} aria-label={`View history for ${habit.title}`}><Icon name={habit.icon} size={16} /><span>{habit.title}</span><ArrowRight size={15} /></button>
@@ -450,7 +547,7 @@ export default function App() {
             <Progress data={data} now={now} selected={selected} select={goal} edit={setForm} options={openOptions} correct={(habit, day) => setCorrection({ habit, day })} />
             {!selected && <PlansProgress plans={data.plans} now={now} toggle={togglePlan} edit={setEditingPlan} />}
           </>}
-          {tab === 'Moris' && <><PageTitle kicker="A FICTIONAL METAMORPHOSIS. A REAL LITTLE EFFORT." title="Still becoming." description="Every repetition changes you. And this little weirdo." /><div className="evolution-portrait"><Moris stage={stage} happy={happy} appearance={data.settings} motion={motion.kind} motionKey={motion.key} /><div><p className="eyebrow">YOUR CURRENT EDITION</p><h2>{STAGES[stage].name}</h2><p>{STAGES[stage].description}</p><strong>{points} XP</strong></div></div><button className="outline-button companion-customize" onClick={() => setCustomizing(true)}>Make this Moris yours<ArrowRight size={16} /></button><EvolutionProgress points={points} /><div className="evolution-ladder">{STAGES.map((item, i) => <article className={i <= stage ? 'unlocked' : 'locked'} key={item.name}><span className="edition-number">ED. 0{i + 1}</span><Moris stage={i} appearance={data.settings} /><div><h3>{item.name}</h3><span>{item.xp} XP · {i <= stage ? 'Unlocked' : 'Still to come'}</span><p>{item.description}</p></div>{i <= stage && <Check size={19} />}</article>)}</div><p className="page-footnote">A missed day never takes away earned XP. Undoing an entry recalculates it.</p></>}
+          {tab === 'Moris' && <MorisJourney settings={data.settings} unlocked={stage} form={currentForm} points={points} happy={happy} motion={motion.kind} motionKey={motion.key} choose={openEvolution} customize={() => setCustomizing(true)} progress={<EvolutionProgress points={points} line={selectedLine} />} />}
           {tab === 'Settings' && <><PageTitle kicker="MAKE YOURSELF AT HOME" title="The little details." description="Your habits. Your pace. Your preferences." /><section className="settings-section"><h2>Your own little weirdo.</h2><p>Choose your Moris’s color and one little quirk. They stay with every evolution.</p><button className="outline-button" onClick={() => setCustomizing(true)}>Choose your Moris<ArrowRight size={16} /></button></section><ReminderSettings controls={reminders} /><section className="settings-section"><h2>Your habits live here.</h2><p>Everything is saved on this device. Clearing browser data, removing the app, or losing your device can erase your records. There is no automatic cloud backup or sync.</p><div className="backup-actions"><button className="primary-button" onClick={() => { downloadBackup(data); report('Your JSON backup is ready to save. Keep it somewhere safe.'); }}><ArrowDownToLine size={18} />Export backup</button><button className="outline-button" onClick={() => fileRef.current?.click()}><ArrowUpFromLine size={18} />Restore backup</button></div><input ref={fileRef} type="file" className="sr-only" accept="application/json,.json" aria-label="Choose Moris backup file" onChange={e => { const file = e.target.files?.[0]; if (file) void importFile(file); e.target.value = ''; }} />{safetyBackup && <button className="text-button" onClick={() => downloadBackup(safetyBackup, 'moris-safety-copy')}>Download the safety copy from your last restore<ArrowDownToLine size={15} /></button>}<p className="small-note">Restoring replaces current records after downloading a fresh backup. A safety copy also stays on this device.</p></section><section className="settings-section"><h2>A place on your Home Screen.</h2><p>{installed ? 'Moris is running as an installed app. Make yourself at home.' : 'Add Moris to your Home Screen. After the first successful load, your habits work without an internet connection.'}</p><button className="outline-button" onClick={() => setInstallHelp(true)}><Plus size={17} />{installed ? 'Installation help' : 'Add to Home Screen'}</button></section><section className="settings-section"><div className="section-heading"><h2>All your little commitments.</h2><button className="text-button" onClick={() => setForm('new')}>Add<Plus size={15} /></button></div>{data.habits.map(habit => {
             const ended = !habit.archivedAt && endedOn(habit, now);
             const paused = !habit.archivedAt && !ended && pausedOn(habit, now);
@@ -472,7 +569,7 @@ export default function App() {
       </div><nav className="bottom-nav" aria-label="Mobile navigation">{(['Today', 'Progress', 'Moris', 'Settings'] as Tab[]).map(name => { const Glyph = tabIcons[name]; return <button key={name} onClick={() => go(name)} aria-current={tab === name ? 'page' : undefined}><Glyph size={20} /><span>{name}</span></button>; })}</nav>
     </>}
     {notice && <div className="toast" role="status"><Check size={17} /><span>{notice}</span>{lastAction && <button onClick={() => { const action = lastAction; setLastAction(null); void complete(action.habit, action.day); }}>Undo</button>}<button className="toast-close" onClick={() => { setNotice(''); setLastAction(null); }} aria-label="Dismiss message"><X size={16} /></button></div>}
-    {customizing && <Dialog title="One Moris. Yours." close={() => setCustomizing(false)} className="companion-dialog"><CompanionEditor stage={stage} appearance={data.settings} onSave={async appearance => { await change(current => ({ ...current, settings: { ...current.settings, ...appearance } })); setCustomizing(false); report('Your color. Your little quirk. Your Moris.'); animateMoris('greet'); }} /></Dialog>}
+    {customizing && <Dialog title="One Moris. Yours." close={() => setCustomizing(false)} className="companion-dialog"><CompanionEditor stage={currentForm.stage} form={currentForm} appearance={data.settings} onSave={async appearance => { await change(current => ({ ...current, settings: { ...current.settings, ...appearance } })); setCustomizing(false); report('Your color. Your little quirk. Your Moris.'); animateMoris('greet'); }} /></Dialog>}
     {evening && <EveningReview data={data} now={now} complete={(habit) => void complete(habit, now)} togglePlan={togglePlan} close={() => setEvening(false)} finish={() => { void reminders.dismissToday().catch(e => report(e.message)); setEvening(false); }} />}
     {optionHabit && <Dialog title="Habit options" close={() => setOptionsId(null)} focusHabitId={optionHabit.id} className="habit-options-dialog">
       <p className="dialog-kicker">{optionHabit.title}</p>
@@ -487,7 +584,8 @@ export default function App() {
     {correction && <Dialog title={correction.day === now ? 'Today’s little record.' : 'A little correction.'} close={() => setCorrection(null)}><p className="dialog-kicker">{correction.habit.title}</p><h3 className="correction-date">{formatDay(correction.day, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</h3><p>{completedOn(data.completions, correction.habit.id, correction.day) ? 'This date is marked complete. Removing it recalculates XP and streaks.' : `This will record a ${correction.day === now ? 'completion for today' : 'retrospective completion'}. It earns 10 XP, once for this habit and date.`}</p>{completedOn(data.completions, correction.habit.id, correction.day) && <p className="small-note">Recorded in {data.completions.find(c => c.habitId === correction.habit.id && c.localDate === correction.day)?.timeZone}. Travel never shifts this historical date.</p>}<button className="primary-button" onClick={() => { void complete(correction.habit, correction.day); setCorrection(null); }}>{completedOn(data.completions, correction.habit.id, correction.day) ? 'Remove completion' : 'Mark as done'}<Check size={18} /></button></Dialog>}
     {archive && <Dialog title="Give this one a rest?" close={() => setArchive(null)} focusHabitId={archive.id}><p><strong>{archive.title}</strong> will leave Today. Its history and earned XP stay with you.</p><button className="primary-button" disabled={pending > 0} onClick={() => void archiveHabit(archive)}>Archive habit<ArrowRight size={17} /></button></Dialog>}
     {imported && <Dialog title="Bring your little world back." close={() => setImported(null)}><p>This backup contains <strong>{imported.habits.length} habits</strong> and <strong>{imported.completions.length} completions</strong>.</p><p>It will replace your current records. First, Moris will download a backup of what is here now and store a safety copy on this device.</p><button className="primary-button" onClick={() => void restore()}>Back up & replace records<RefreshCw size={17} /></button><button className="text-button" onClick={() => setImported(null)}>Keep my current records</button></Dialog>}
-    {celebration !== null && <Dialog title="A new kind of weird." close={() => setCelebration(null)} className="celebration"><EvolutionScene key={celebration} from={celebrationFrom.current} to={celebration} appearance={data.settings} quiet={!data.settings.animationsEnabled} /><p className="eyebrow">EDITION 0{celebration + 1} UNLOCKED</p><h3>{STAGES[celebration].name}</h3><p>{STAGES[celebration].description}</p><button className="primary-button" onClick={() => setCelebration(null)}>Keep showing up<ArrowRight size={18} /></button></Dialog>}
+    {choosing !== null && <Dialog title="Choose your Moris line." close={postponeEvolution} className="evolution-choice-dialog"><EvolutionChooser key={choosing} stage={choosing} settings={data.settings} choose={selectEvolution} later={postponeEvolution} /></Dialog>}
+    {celebration !== null && celebratedForm && <Dialog title="A new kind of weird." close={() => { setCelebration(null); animateMoris('greet'); }} className="celebration"><EvolutionScene key={celebration} from={celebrationFrom.current.stage} to={celebration} fromForm={celebrationFrom.current} toForm={celebratedForm} appearance={data.settings} quiet={!data.settings.animationsEnabled} /><p className="eyebrow">EDITION 0{celebration + 1} · YOUR CHOSEN DIRECTION</p><h3>{evolutionLabel(celebratedForm.stage, celebratedForm.branch)}</h3><p>{celebratedForm.branch ? lineageChange(celebratedForm) : 'Still your familiar Moris, growing one detail at a time.'}</p><button className="primary-button" onClick={() => { setCelebration(null); animateMoris('greet'); }}>Keep showing up<ArrowRight size={18} /></button></Dialog>}
     {installHelp && <Dialog title="A little closer to home." close={() => setInstallHelp(false)}>{installEvent ? <><p>Install Moris for a place on your Home Screen and a clean app window.</p><button className="primary-button" onClick={() => { void installEvent.prompt().then(() => installEvent.userChoice).then(choice => { if (choice.outcome === 'accepted') setInstallHelp(false); setInstallEvent(null); }).catch(() => report('Use your browser menu to add Moris to your Home Screen.')); }}>Install Moris<Plus size={18} /></button></> : <><h3>On iPhone or iPad</h3><p>Open Moris in Safari. Tap <strong>Share</strong>, choose <strong>Add to Home Screen</strong>, then tap <strong>Add</strong>. If needed, find Share in Safari’s menu.</p><h3>On Android</h3><p>Open Moris in Chrome. Open the browser menu and choose <strong>Install app</strong> or <strong>Add to Home screen</strong>.</p></>}<p className="small-note">Load Moris once while connected so offline setup can finish. Installation availability depends on your browser.</p></Dialog>}
     {update && <div className="update-banner"><span>A fresh edition of Moris is ready.</span><button disabled={pending > 0} onClick={() => { void writesFinished().then(() => updateRef.current?.(true)).catch(e => report(e.message)); }}>Save & update<RefreshCw size={14} /></button><button aria-label="Update later" onClick={() => setUpdate(false)}><X size={16} /></button></div>}
   </div>;
@@ -540,11 +638,11 @@ function EveningReview({ data, now, complete, togglePlan, close, finish }: { dat
   </Dialog>;
 }
 
-function EvolutionProgress({ points }: { points: number }) {
+function EvolutionProgress({ points, line }: { points: number; line: EvolutionBranch | null }) {
   const stage = stageOf(points), current = STAGES[stage], next = STAGES[stage + 1];
   const wins = next ? Math.ceil((next.xp - points) / 10) : 0;
   return <section className="next-evolution" aria-label="Next Moris evolution">{next ? <>
-    <div><p className="eyebrow">THE NEXT KIND OF WEIRD</p><h2>{next.name}</h2><p>{wins} little {wins === 1 ? 'win' : 'wins'} away. One completion = 10 XP.</p></div>
+    <div><p className="eyebrow">THE NEXT KIND OF WEIRD</p><h2>{line ? evolutionLabel(stage + 1, line) : 'Four possible lines'}</h2><p>{wins} little {wins === 1 ? 'win' : 'wins'} away. One completion = 10 XP.</p></div>
     <strong>{points} / {next.xp} XP</strong>
     <div className="next-evolution-meter" role="progressbar" aria-label="Progress toward next evolution" aria-valuemin={current.xp} aria-valuemax={next.xp} aria-valuenow={points}><i style={{ width: `${(points - current.xp) / (next.xp - current.xp) * 100}%` }} /></div>
   </> : <><div><p className="eyebrow">SEVEN EDITIONS. STILL YOU.</p><h2>Infinite potential. Tiny daily steps.</h2><p>Keep collecting the little wins. Your XP and history keep growing.</p></div><Sparkles size={28} /></>}</section>;

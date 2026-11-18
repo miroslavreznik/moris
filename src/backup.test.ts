@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { backupOf, parseBackup } from './backup';
-import { demoSnapshot, STAGES } from './domain';
+import { demoSnapshot, STAGES, stageOf, xpOf } from './domain';
 const sample = () => backupOf(demoSnapshot('2026-10-25'));
 describe('safe backup parsing', () => {
   it('preserves a personal Moris across export and restore', () => {
@@ -66,7 +66,7 @@ describe('safe backup parsing', () => {
     backup.habits[1].archivedAt = '2026-10-25T18:00:00Z';
 
     const restored = parseBackup(JSON.parse(JSON.stringify(backup)));
-    expect(backup.schemaVersion).toBe(4);
+    expect(backup.schemaVersion).toBe(6);
     expect(restored.habits).toEqual(backup.habits);
     expect(restored.completions).toEqual(backup.completions);
     const completionDays = restored.completions.filter(c => c.habitId === habit.id).map(c => c.localDate);
@@ -117,7 +117,50 @@ describe('safe backup parsing', () => {
     backup.habits[0].endDate = '2026-10-24';
     expect(() => parseBackup(backup)).toThrow('outside its historical schedule');
   });
-  it('rejects unsupported versions before changing anything', () => { expect(() => parseBackup({ ...sample(), schemaVersion: 5 })).toThrow('version'); });
+  it('round-trips chosen directions, legacy appearance and dormant choices without rewriting records', () => {
+    const backup = sample();
+    backup.settings.evolutionLegacyStage = 3;
+    backup.settings.evolutionLine = 'botanic';
+    backup.settings.evolutionChoices = [{ stage: 3, branch: 'botanic' }, { stage: 6, branch: 'origami' }];
+    expect(parseBackup(JSON.parse(JSON.stringify(backup))).settings).toEqual(backup.settings);
+    expect(parseBackup(backup).completions).toEqual(backup.completions);
+  });
+  it('restores versions 1–4 with the current legacy form and no invented evolution choices', () => {
+    const backup = sample();
+    for (const schemaVersion of [1, 2, 3, 4]) {
+      const restored = parseBackup({ ...backup, schemaVersion });
+      expect(restored.settings).toMatchObject({ evolutionLine: null, evolutionChoices: [], evolutionLegacyStage: stageOf(xpOf(backup.completions)) });
+      expect(restored.completions).toEqual(backup.completions);
+      expect(restored.habits).toEqual(backup.habits);
+    }
+  });
+  it('migrates mixed version 5 history to its earliest fixed line without touching records', () => {
+    const backup = sample();
+    const settings = { ...backup.settings, evolutionChoices: [{ stage: 5, branch: 'zoology' }, { stage: 1, branch: 'origami' }, { stage: 6, branch: 'botanic' }] };
+    const restored = parseBackup({ ...backup, schemaVersion: 5, settings });
+    expect(restored.settings.evolutionLine).toBe('origami');
+    expect(restored.settings.evolutionChoices).toEqual([{ stage: 1, branch: 'origami' }, { stage: 5, branch: 'zoology' }, { stage: 6, branch: 'botanic' }]);
+    expect(restored.habits).toEqual(backup.habits);
+    expect(restored.completions).toEqual(backup.completions);
+  });
+  it('round-trips each of the four fixed lines in version 6', () => {
+    for (const evolutionLine of ['classic', 'zoology', 'origami', 'botanic'] as const) {
+      const backup = sample();
+      backup.settings.evolutionLine = evolutionLine;
+      backup.settings.evolutionChoices = [{ stage: 1, branch: evolutionLine }];
+      expect(parseBackup(JSON.parse(JSON.stringify(backup))).settings).toEqual(backup.settings);
+    }
+  });
+  it('rejects invalid evolution history before replacing any records', () => {
+    const backup = sample();
+    for (const patch of [
+      { evolutionLine: undefined }, { evolutionLine: 'unknown' }, { evolutionChoices: undefined }, { evolutionLegacyStage: undefined }, { evolutionLegacyStage: 7 },
+      { evolutionChoices: [{ stage: 0, branch: 'zoology' }] },
+      { evolutionChoices: [{ stage: 1, branch: 'unknown' }] },
+      { evolutionChoices: [{ stage: 1, branch: 'origami' }, { stage: 1, branch: 'botanic' }] },
+    ]) expect(() => parseBackup({ ...backup, settings: { ...backup.settings, ...patch } })).toThrow(/evolution/i);
+  });
+  it('rejects unsupported versions before changing anything', () => { expect(() => parseBackup({ ...sample(), schemaVersion: 7 })).toThrow('version'); });
   it('rejects a current backup without a plans array', () => {
     expect(() => parseBackup({ ...sample(), plans: undefined })).toThrow('plan records');
   });

@@ -1,4 +1,5 @@
 import { DEFAULT_APPEARANCE, type Appearance } from './appearance';
+import type { EvolutionBranch, EvolutionChoice } from './evolution';
 
 export type Day = string;
 export type Schedule =
@@ -11,11 +12,11 @@ export type Habit = { id: string; title: string; icon: string; color: string; cr
 export type Revision = { id: string; habitId: string; effectiveFrom: Day; schedule: Schedule };
 export type Completion = { id: string; habitId: string; localDate: Day; timeZone: string; createdAt: string };
 export type OneOffPlan = { id: string; title: string; date: Day; completed: boolean };
-export type Settings = Appearance & { soundEnabled: boolean; animationsEnabled: boolean; locale: 'en'; celebratedStage: number };
+export type Settings = Appearance & { soundEnabled: boolean; animationsEnabled: boolean; locale: 'en'; celebratedStage: number; evolutionLine: EvolutionBranch | null; evolutionChoices: EvolutionChoice[]; evolutionLegacyStage: number };
 export type Snapshot = { habits: Habit[]; revisions: Revision[]; completions: Completion[]; plans: OneOffPlan[]; settings: Settings; onboardingComplete: boolean };
 export type DayState = 'completed' | 'due' | 'missed' | 'not_scheduled' | 'future';
 export const MAX_TITLE_LENGTH = 100;
-export const DEFAULT_SETTINGS: Settings = { ...DEFAULT_APPEARANCE, soundEnabled: true, animationsEnabled: true, locale: 'en', celebratedStage: 0 };
+export const DEFAULT_SETTINGS: Settings = { ...DEFAULT_APPEARANCE, soundEnabled: true, animationsEnabled: true, locale: 'en', celebratedStage: 0, evolutionLine: null, evolutionChoices: [], evolutionLegacyStage: 0 };
 export const EMPTY: Snapshot = { habits: [], revisions: [], completions: [], plans: [], settings: DEFAULT_SETTINGS, onboardingComplete: false };
 export const STAGES = [
   { name: 'Proto-Moris', xp: 0, description: 'One cell. Several opinions. A tiny beginning with unreasonable potential.' },
@@ -223,5 +224,5 @@ export function demoSnapshot(now: Day): Snapshot {
     const done = index === 0 ? (age === 0 || age % 7 !== 2 && age % 7 !== 5) : index === 1 ? age > 0 && age % 6 !== 0 : [2, 4].includes(weekday(day)) && age > 0;
     if (due && done) completions.push({ id: `${habit.id}:${day}`, habitId: habit.id, localDate: day, timeZone: timeZone(), createdAt: `${day}T12:00:00Z` });
   }
-  return { habits, revisions, completions, plans: [], settings: { ...DEFAULT_SETTINGS, celebratedStage: 4 }, onboardingComplete: true };
+  return { habits, revisions, completions, plans: [], settings: { ...DEFAULT_SETTINGS, celebratedStage: 4, evolutionLegacyStage: stageOf(xpOf(completions)) }, onboardingComplete: true };
 }

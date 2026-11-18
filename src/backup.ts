@@ -1,7 +1,8 @@
 import { MORIS_COLORS, MORIS_DETAILS, appearanceOf } from './appearance';
-import { type Snapshot, type Schedule, type Habit, type HabitPause, type Revision, type Completion, type OneOffPlan, DEFAULT_SETTINGS, MAX_TITLE_LENGTH, STAGES, isDay, revisionAt, scheduled } from './domain';
-export type Backup = Snapshot & { schemaVersion: 4; exportedAt: string };
-export function backupOf(state: Snapshot): Backup { return { ...state, schemaVersion: 4, exportedAt: new Date().toISOString() }; }
+import { type Snapshot, type Schedule, type Habit, type HabitPause, type Revision, type Completion, type OneOffPlan, DEFAULT_SETTINGS, MAX_TITLE_LENGTH, STAGES, isDay, revisionAt, scheduled, stageOf, xpOf } from './domain';
+import { parseEvolutionState, type EvolutionState } from './evolution';
+export type Backup = Snapshot & { schemaVersion: 6; exportedAt: string };
+export function backupOf(state: Snapshot): Backup { return { ...state, schemaVersion: 6, exportedAt: new Date().toISOString() }; }
 export function downloadBackup(state: Snapshot, prefix = 'moris-backup'): void {
   const blob = new Blob([JSON.stringify(backupOf(state), null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob), link = document.createElement('a');
@@ -31,9 +32,10 @@ function parsePauses(value: unknown): HabitPause[] {
   return pauses;
 }
 export function parseBackup(input: unknown): Snapshot {
-  if (!object(input) || (input.schemaVersion !== 1 && input.schemaVersion !== 2 && input.schemaVersion !== 3 && input.schemaVersion !== 4)) fail('the format version is not supported.');
+  if (!object(input) || (input.schemaVersion !== 1 && input.schemaVersion !== 2 && input.schemaVersion !== 3 && input.schemaVersion !== 4 && input.schemaVersion !== 5 && input.schemaVersion !== 6)) fail('the format version is not supported.');
+  const schemaVersion = input.schemaVersion as 1 | 2 | 3 | 4 | 5 | 6;
   if (!Array.isArray(input.habits) || !Array.isArray(input.revisions) || !Array.isArray(input.completions)) fail('habit, schedule, or completion records are missing.');
-  const rawPlans = input.schemaVersion === 1 ? [] : input.plans;
+  const rawPlans = schemaVersion === 1 ? [] : input.plans;
   if (!Array.isArray(rawPlans)) fail('plan records are missing or invalid.');
   if (input.habits.length > 1000 || input.revisions.length > 10000 || input.completions.length > 100000 || rawPlans.length > 100000) fail('the backup contains too many records.');
   const ids = new Set<string>();
@@ -41,8 +43,8 @@ export function parseBackup(input: unknown): Snapshot {
     if (!object(h) || !text(h.id) || ids.has(h.id) || !text(h.title, MAX_TITLE_LENGTH) || !h.title.trim() || !text(h.icon, 30) || typeof h.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(h.color) || !instant(h.createdAt) || !isDay(h.startDate)) return fail('a habit is invalid or duplicated.');
     ids.add(h.id);
     if ((h.archivedAt !== undefined || h.archivedOn !== undefined) && (!instant(h.archivedAt) || !isDay(h.archivedOn))) fail('an archive date is invalid.');
-    const pauses = (input.schemaVersion === 3 || input.schemaVersion === 4) && h.pauses !== undefined ? parsePauses(h.pauses) : undefined;
-    const endDate = input.schemaVersion === 4 ? h.endDate : undefined;
+    const pauses = schemaVersion >= 3 && h.pauses !== undefined ? parsePauses(h.pauses) : undefined;
+    const endDate = schemaVersion >= 4 ? h.endDate : undefined;
     if (endDate !== undefined && (!isDay(endDate) || endDate < h.startDate)) fail('a habit end date is invalid or precedes its start date.');
     return { id: h.id, title: h.title.trim(), icon: h.icon, color: h.color, createdAt: h.createdAt, startDate: h.startDate, ...(endDate !== undefined ? { endDate: endDate as string } : {}), ...(h.archivedAt ? { archivedAt: h.archivedAt as string, archivedOn: h.archivedOn as string } : {}), ...(pauses !== undefined ? { pauses } : {}) };
   });
@@ -79,5 +81,8 @@ export function parseBackup(input: unknown): Snapshot {
   const settings = input.settings;
   if (settings.morisColor !== undefined && !MORIS_COLORS.some(color => color.id === settings.morisColor)) fail('the Moris color is invalid.');
   if (settings.morisDetail !== undefined && !MORIS_DETAILS.some(detail => detail.id === settings.morisDetail)) fail('the Moris detail is invalid.');
-  return { habits, revisions, completions, plans, settings: { ...DEFAULT_SETTINGS, ...appearanceOf(input.settings as Parameters<typeof appearanceOf>[0]), celebratedStage: Number.isInteger(input.settings.celebratedStage) ? Math.min(STAGES.length - 1, Math.max(0, input.settings.celebratedStage as number)) : 0 }, onboardingComplete: true };
+  let evolution: EvolutionState;
+  try { evolution = schemaVersion >= 5 ? parseEvolutionState(schemaVersion === 5 ? { ...settings, evolutionLine: undefined } : settings, { requireLine: schemaVersion === 6 }) : { evolutionLine: null, evolutionChoices: [], evolutionLegacyStage: stageOf(xpOf(completions)) }; }
+  catch (error) { fail(error instanceof Error ? error.message : 'evolution settings are invalid.'); }
+  return { habits, revisions, completions, plans, settings: { ...DEFAULT_SETTINGS, ...appearanceOf(input.settings as Parameters<typeof appearanceOf>[0]), ...evolution, celebratedStage: Number.isInteger(input.settings.celebratedStage) ? Math.min(STAGES.length - 1, Math.max(0, input.settings.celebratedStage as number)) : 0 }, onboardingComplete: true };
 }

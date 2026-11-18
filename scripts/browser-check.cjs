@@ -230,7 +230,7 @@ const waitReady = async page => { await page.evaluate(async () => { await naviga
   const download = await downloadPromise;
   const backupPath = path.join(output, 'backup.json'); await download.saveAs(backupPath);
   const backupBytes = await readFile(backupPath), backup = JSON.parse(backupBytes);
-  assert.equal(backup.schemaVersion, 4); assert.deepEqual(backup.plans, []); assert.equal(backup.completions.length, 1); assert.equal(backup.habits.length, 3);
+  assert.equal(backup.schemaVersion, 6); assert.deepEqual(backup.plans, []); assert.equal(backup.completions.length, 1); assert.equal(backup.habits.length, 3);
   assert.equal(backup.habits.find(habit => habit.title === 'Stretch a little').icon, 'food');
   assert.equal(backup.habits.find(habit => habit.title === 'Stretch a little').color, '#b64f73');
   const localToday = await page.evaluate(() => { const day = new Date(); return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`; });
@@ -285,6 +285,7 @@ const waitReady = async page => { await page.evaluate(async () => { await naviga
   await restored.getByLabel('Start date', { exact: true }).fill(lastWeek);
   await restored.getByRole('dialog').getByRole('button', { name: 'Add habit', exact: true }).click();
   await restored.getByRole('button', { name: 'Complete A little practice today', exact: true }).click();
+  await restored.getByRole('button', { name: 'Choose zoology', exact: true }).click();
   await restored.getByRole('heading', { name: 'A new kind of weird.', exact: true }).waitFor();
   await restored.getByRole('button', { name: 'Keep showing up', exact: true }).click();
   await nav(restored, 'Progress');

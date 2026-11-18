@@ -1,5 +1,30 @@
 # Moris validation
 
+## Four fixed evolution lines — local release validation, November 18, 2026
+
+- 105 automated checks pass. The complete production-preview browser suites
+  pass: 22 general app checks, nine reminder checks, five duration checks,
+  five companion checks and three evolution checks.
+- Nine development/production-boundary evolution groups pass, including all 28
+  individually named forms and 84 happy personalized variants. The four final
+  foil effects respond to pointer movement and keep a static reduced-motion
+  finish. Every original eye/smile fits its actual body; SVG paints and visible
+  strokes stay valid at mobile sizes.
+- The whole-app review corrected the next-evolution meter to show the chosen
+  line's next named form and made quirk thumbnails use the current line/stage.
+- A delayed IndexedDB regression verifies that an earned evolution waits for
+  the usable habit editor to close, then opens once. Undo/reset/restore cancel
+  stale callbacks and do not replay already saved milestones.
+- The real Pages PWA upgrade check passes from deployed baseline `bc270844` to
+  the release candidate at the unchanged `/moris/` origin/scope. Save & update
+  preserves all five IndexedDB stores exactly, including paused/ended/archived
+  goals, all four schedules, plans, appearance, reminder credentials, unrelated
+  metadata and safety backup. Voluntary line adoption, v6 export and a real
+  offline reopen also pass. All test records are fictional and isolated.
+- Live reminder config/CORS/preflight/public-dispatch isolation were checked
+  read-only; the release does not change the reminder backend or sender.
+
+
 ## Personal companion iteration, November 4, 2026
 
 - 50 automated checks pass, plus 29 browser checks (15 original, three late-evolution, six reminder and five companion scenarios).

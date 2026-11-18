@@ -1,0 +1,8 @@
+/* A moving interference band follows the actual final-form silhouette. */
+.moris-holo{opacity:.48;isolation:isolate}
+.moris-foil-pointer{transform:translate(var(--foil-x,0px),var(--foil-y,0px));transition:transform .35s ease-out}
+.moris-foil-spectrum{mix-blend-mode:soft-light;transform-origin:100px 100px;animation:moris-foil-spectrum 8s ease-in-out infinite}
+.moris-foil-glint{mix-blend-mode:screen;opacity:.5;transform-origin:100px 100px;animation:moris-foil-glint 8s ease-in-out infinite}
+@keyframes moris-foil-spectrum{0%,100%{transform:translate(-95px,22px) rotate(-8deg);opacity:.45}48%{transform:translate(85px,-22px) rotate(8deg);opacity:.95}}
+@keyframes moris-foil-glint{0%,12%{transform:translate(-145px,36px);opacity:0}35%{opacity:.55}64%{transform:translate(145px,-36px);opacity:0}100%{transform:translate(145px,-36px);opacity:0}}
+@media(prefers-reduced-motion:reduce){.moris-foil-spectrum,.moris-foil-glint{animation:none;transform:none}.moris-foil-pointer{transform:none;transition:none}.moris-foil-spectrum{opacity:.55}.moris-foil-glint{opacity:.15}}

@@ -4,6 +4,8 @@ Every repetition changes you. A mobile-first, local-first habit PWA with an orig
 
 Public app: **https://miroslavreznik.github.io/moris/**. GitHub Actions builds and publishes `main`. The repository is public; personal habits and backups are not part of it.
 
+Local branching-evolution playtest: see [the local app and fast evolution lab](docs/branching-evolutions.md). This work is prepared on a local branch before publishing.
+
 The working visual direction is **Sunday Club**, combined with **Oddly Good's readable progress grids**. Each habit has its own progress view; weekly quotas use calendar weeks rather than invented daily streaks.
 
 ## Run locally
@@ -43,6 +45,7 @@ The production preview is normally at `http://localhost:4173`. The development s
 - Separate goal overviews, 35-day calendars, historical corrections, current/best streaks, and up to 12 weeks of quota history.
 - Prospective schedule revisions. A completed current day keeps its schedule; changes then start tomorrow or later. Partial first/changed weeks cannot become failed weekly streaks.
 - Seven original SVG evolution stages, derived XP, skippable transformation scenes, a next-evolution meter, completion sounds and animations enabled for everyone, and system reduced-motion support.
+- Four fixed evolution lines: the original Moris plus odd zoology, paper life and botanic creature. One permanent choice, automatic XP progression, 28 authored SVG forms and a holographic final finish. Existing Moris forms stay until a line is chosen. See [Local evolution playtest](docs/branching-evolutions.md).
 - A personal Moris: five colors and one of three little quirks, shared by every evolution, with a live preview in onboarding and the Moris/Settings editor. Appearance is included in backups; older data opens with the familiar orange color and freckles.
 - A welcome reaction, quiet breathing/blinking, three completion reactions and a larger last-fixed-goal reaction. Saying hello to Moris is playful without changing XP.
 - IndexedDB via Dexie, a unique habit/date index, versioned schema, and transactional writes.
@@ -75,7 +78,7 @@ Browser artifacts are written to ignored `test-results/`. See `docs/qa.md` for v
 
 `src/domain.ts` contains calendar-date scheduling, revision-aware history, streaks, and rewards independently of React. Date arithmetic uses calendar dates in UTC; recorded local dates and their time zones stay fixed when the device travels. A Monday–Sunday quota counts distinct completion dates. Open days/weeks do not prematurely break streaks.
 
-`src/storage.ts` declares IndexedDB version 2. Pause intervals are stored on habit records. Backups use version 3 and can still read versions 1 and 2. `src/store.ts` serializes writes while keeping UI feedback immediate. A storage failure reloads durable records and reports the failure.
+`src/storage.ts` declares IndexedDB version 2. Pause intervals are stored on habit records. Backups use version 6 and can still read versions 1–5, including the earlier mixed-evolution prototype. `src/store.ts` serializes writes while keeping UI feedback immediate. A storage failure reloads durable records and reports the failure.
 
 Habits remain device-local, with **no habit account, automatic cloud backup, cross-device habit sync, paid subscription, or external analytics**. Opt-in browser push uses a small same-origin server storing delivery details and date/boolean eligibility only; see `docs/reminders.md`. Clearing browser data or losing the device can lose records. Export backups regularly; demo data is illustrative.
 

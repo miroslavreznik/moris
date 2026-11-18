@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { type Snapshot, today } from './domain';
-import { db, isDemo } from './storage';
+import { db, isDemo, isEvolutionLab } from './storage';
 import { reminderPlan } from './reminder-plan';
 
 type Preferences = { id: string; token: string; enabled: boolean; version: number; dismissedDay?: string; lastSync?: string; pendingSync: boolean };
@@ -17,7 +17,8 @@ async function post(path: string, body: unknown) {
   if (!response.ok) throw new Error(result.error || 'Reminders could not sync. They will retry when you are online.');
 }
 
-export function useReminders(data: Snapshot, loaded: boolean, pending: number) {
+export function useReminders(data: Snapshot, loaded: boolean, pending: number, disabled = false) {
+  const blocked = isDemo || isEvolutionLab || disabled;
   const [preferences, setPreferences] = useState<Preferences | null>(null);
   const prefsRef = useRef(preferences); prefsRef.current = preferences;
   const dataRef = useRef(data); dataRef.current = data;
@@ -31,11 +32,13 @@ export function useReminders(data: Snapshot, loaded: boolean, pending: number) {
   const signature = JSON.stringify(preferences ? { enabled: preferences.enabled, days: reminderPlan(data, today(), preferences.dismissedDay) } : null);
 
   const save = useCallback(async (next: Preferences) => {
+    if (blocked) return;
     await db.meta.put({ key: PREF_KEY, value: next });
     prefsRef.current = next; setPreferences(next);
-  }, []);
+  }, [blocked]);
 
   const sync = useCallback(() => {
+    if (blocked) return Promise.resolve();
     const job = queue.current.catch(() => {}).then(async () => {
       const current = prefsRef.current;
       if (!current) return;
@@ -51,20 +54,21 @@ export function useReminders(data: Snapshot, loaded: boolean, pending: number) {
     });
     queue.current = job;
     return job;
-  }, [save]);
+  }, [save, blocked]);
 
   useEffect(() => {
-    if (isDemo) { setReady(true); return; }
+    if (blocked) { setPreferences(null); setReady(true); return; }
     let alive = true;
     void db.meta.get(PREF_KEY).then(row => { if (alive) { setPreferences((row?.value as Preferences) || null); setReady(true); } }).catch(() => { if (alive) setError('Reminder preferences could not be opened.'); });
     const refresh = () => { setOnline(navigator.onLine); setRetry(n => n + 1); };
     const visible = () => { if (!document.hidden) refresh(); };
     window.addEventListener('online', refresh); window.addEventListener('offline', refresh); document.addEventListener('visibilitychange', visible);
     return () => { alive = false; window.removeEventListener('online', refresh); window.removeEventListener('offline', refresh); document.removeEventListener('visibilitychange', visible); };
-  }, []);
+  }, [blocked]);
 
   useEffect(() => {
-    if (isDemo || !supported() || !online) return;
+    if (blocked) { setConfig(null); return; }
+    if (!supported() || !online) return;
     const controller = new AbortController();
     void fetch(`${api}config`, { cache: 'no-store', signal: controller.signal }).then(async response => {
       if (!response.ok) throw new Error('The reminder service is unavailable. Please try again when you are online.');
@@ -73,16 +77,16 @@ export function useReminders(data: Snapshot, loaded: boolean, pending: number) {
       setConfig(result);
     }).catch(reason => { if (!controller.signal.aborted) setError(reason.message); });
     return () => controller.abort();
-  }, [online, retry]);
+  }, [online, retry, blocked]);
 
   useEffect(() => {
-    if (!ready || !loaded || pending || !preferences || isDemo || !config || !online) return;
+    if (!ready || !loaded || pending || !preferences || blocked || !config || !online) return;
     void sync().catch(reason => setError(reason.message));
     // Signature captures actual plan changes; lastSync/version must not resync.
-  }, [signature, ready, loaded, pending, !!config, online, retry, sync]);
+  }, [signature, ready, loaded, pending, !!config, online, retry, sync, blocked]);
 
   async function enable() {
-    if (!supported() || !config) return;
+    if (blocked || !supported() || !config) return;
     setBusy(true); setError('');
     try {
       // Permission is requested only from the user's button click.
@@ -100,7 +104,7 @@ export function useReminders(data: Snapshot, loaded: boolean, pending: number) {
     finally { setBusy(false); }
   }
   async function disable() {
-    if (!prefsRef.current) return;
+    if (blocked || !prefsRef.current) return;
     setBusy(true); setError('');
     try {
       await save({ ...prefsRef.current, enabled: false, pendingSync: true });
@@ -112,6 +116,7 @@ export function useReminders(data: Snapshot, loaded: boolean, pending: number) {
     finally { setBusy(false); }
   }
   async function test() {
+    if (blocked) return;
     const current = prefsRef.current;
     if (!current?.enabled) return;
     setBusy(true); setError('');
@@ -120,22 +125,22 @@ export function useReminders(data: Snapshot, loaded: boolean, pending: number) {
     finally { setBusy(false); }
   }
   async function dismissToday() {
-    if (!prefsRef.current) return;
+    if (blocked || !prefsRef.current) return;
     await save({ ...prefsRef.current, dismissedDay: today(), pendingSync: true });
     await sync().catch(reason => setError(reason.message));
     const registration = await navigator.serviceWorker.getRegistration();
     for (const notification of await registration?.getNotifications({ tag: 'moris-evening' }) || []) notification.close();
   }
-  return { preferences, config, ready, busy, error, online, enable, disable, test, dismissToday };
+  return { preferences, config, ready, busy, error, online, disabled: blocked, enable, disable, test, dismissToday };
 }
 
 export type ReminderControls = ReturnType<typeof useReminders>;
 export function ReminderSettings({ controls }: { controls: ReminderControls }) {
   const { preferences, config, ready, busy, error, online, enable, disable, test } = controls;
-  const canUse = supported() && !isDemo;
+  const canUse = supported() && !controls.disabled;
   const homeScreenNeeded = !canUse && /iPad|iPhone|iPod/.test(navigator.userAgent);
   return <section className="settings-section reminder-settings"><h2>A gentle evening reminder.</h2><p>One system notification around 7:30 pm, Central European time. Nothing when your day is complete or there’s nothing scheduled. Tap it to review today and look at tomorrow.</p>
-    {canUse ? <div className="backup-actions"><button className="outline-button" disabled={busy || !ready || (!preferences?.enabled && (!online || !config))} onClick={() => void (preferences?.enabled ? disable() : enable())}>{busy ? 'Updating reminders…' : preferences?.enabled ? 'Turn reminders off' : 'Enable evening reminders'}</button>{preferences?.enabled && <button className="text-button" disabled={busy || !online} onClick={() => void test()}>Send a test notification</button>}</div> : <p className="small-note">{isDemo ? 'Reminders are available in your own Moris, outside the demo.' : homeScreenNeeded ? 'On iPhone or iPad, add Moris to your Home Screen in Safari, then open it from there to enable notifications.' : 'This browser does not support web push. Try a current version of Chrome, Edge, Firefox, or an installed Safari web app.'}</p>}
+    {canUse ? <div className="backup-actions"><button className="outline-button" disabled={busy || !ready || (!preferences?.enabled && (!online || !config))} onClick={() => void (preferences?.enabled ? disable() : enable())}>{busy ? 'Updating reminders…' : preferences?.enabled ? 'Turn reminders off' : 'Enable evening reminders'}</button>{preferences?.enabled && <button className="text-button" disabled={busy || !online} onClick={() => void test()}>Send a test notification</button>}</div> : <p className="small-note">{isEvolutionLab ? 'Reminders stay off in the local evolution lab. Your normal installation is unchanged.' : isDemo ? 'Reminders are available in your own Moris, outside the demo.' : homeScreenNeeded ? 'On iPhone or iPad, add Moris to your Home Screen in Safari, then open it from there to enable notifications.' : 'This browser does not support web push. Try a current version of Chrome, Edge, Firefox, or an installed Safari web app.'}</p>}
     {preferences && <p className="small-note" role="status">{preferences.enabled ? 'Reminders are on for this installation.' : 'Reminders are off for this installation.'}{preferences.pendingSync ? ' Server update waiting for a connection.' : preferences.lastSync ? ` Last synced ${new Date(preferences.lastSync).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}.` : ''}</p>}
     {error && <p className="form-error" role="alert">{error}</p>}
     <details className="reminder-details"><summary>Privacy & delivery limits</summary><p className="small-note">Your goals and history stay on this device. Enabling reminders sends only delivery details and which of the next 14 days need a reminder. Offline changes sync when you reconnect, so a reminder may occasionally arrive after you’ve finished offline. Reminders pause after 14 days without a visit. Your phone’s notification and battery settings can delay delivery.</p></details>

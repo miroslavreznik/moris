@@ -1,14 +1,17 @@
 import Dexie, { type Table } from 'dexie';
-import { type Habit, type Revision, type Completion, type OneOffPlan, type Snapshot, EMPTY, demoSnapshot, today } from './domain';
+import { type Habit, type Revision, type Completion, type OneOffPlan, type Snapshot, EMPTY, demoSnapshot, today, xpOf, stageOf } from './domain';
 import { backupOf } from './backup';
-export const isDemo = typeof location !== 'undefined' && new URLSearchParams(location.search).has('demo');
+import { evolutionStateOf } from './evolution';
+import { createEvolutionLabSnapshot } from './evolution-lab';
+export const isEvolutionLab = import.meta.env.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).get('evolutionLab') === '1';
+export const isDemo = !isEvolutionLab && typeof location !== 'undefined' && new URLSearchParams(location.search).has('demo');
 export class MorisDatabase extends Dexie {
   habits!: Table<Habit, string>;
   revisions!: Table<Revision, string>;
   completions!: Table<Completion, string>;
   plans!: Table<OneOffPlan, string>;
   meta!: Table<{ key: string; value: unknown }, string>;
-  constructor(name = isDemo ? 'moris-demo-v1' : 'moris') {
+  constructor(name = isEvolutionLab ? 'moris-evolution-lab-v1' : isDemo ? 'moris-demo-v1' : 'moris') {
     super(name);
     // Increment with .version(n).stores(...).upgrade(...) for future schema changes.
     // App-shell updates never delete or recreate this database.
@@ -24,7 +27,8 @@ export async function loadSnapshot(database = db): Promise<Snapshot> {
     ]);
     const value = config?.value as Partial<Snapshot> | undefined;
     // Keep legacy preference fields compatible while always enabling completion feedback.
-    return { habits, revisions, completions, plans, settings: { ...EMPTY.settings, ...value?.settings, soundEnabled: true, animationsEnabled: true }, onboardingComplete: value?.onboardingComplete ?? false };
+    const evolution = evolutionStateOf(value?.settings, stageOf(xpOf(completions)));
+    return { habits, revisions, completions, plans, settings: { ...EMPTY.settings, ...value?.settings, ...evolution, soundEnabled: true, animationsEnabled: true }, onboardingComplete: value?.onboardingComplete ?? false };
   });
 }
 async function delta<T extends { id: string }>(table: Table<T, string>, before: T[], after: T[]): Promise<void> {
@@ -53,6 +57,7 @@ export async function replaceWithBackup(before: Snapshot, after: Snapshot, datab
 }
 export async function initialize(): Promise<Snapshot> {
   let snapshot = await loadSnapshot();
-  if (isDemo && !snapshot.onboardingComplete) { const seed = demoSnapshot(today()); await saveDelta(snapshot, seed); snapshot = seed; }
+  if (isEvolutionLab && !snapshot.onboardingComplete) { const seed = createEvolutionLabSnapshot(); await saveDelta(snapshot, seed); snapshot = seed; }
+  else if (isDemo && !snapshot.onboardingComplete) { const seed = demoSnapshot(today()); await saveDelta(snapshot, seed); snapshot = seed; }
   return snapshot;
 }

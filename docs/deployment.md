@@ -1,5 +1,22 @@
 # Moris HTTPS deployment
 
+## Four fixed evolution lines — November 18, 2026
+
+The release adds Original Moris, Odd Zoology, Paper Life and Botanic Creature:
+one saved selection, six automatic transformations, 28 individually named
+SVG forms and a holographic final finish. Backups export v6 and accept v1–v5.
+Existing installations keep their original form until choosing a line; no
+habit tables, XP records, PWA identity or reminder credentials are replaced.
+
+Publication uses the existing `main` → GitHub Pages workflow below. The
+release candidate was built with the same `/moris/` base and public reminder
+relay URL. The whole-app suites and a real previous-version Save & update
+migration pass; evidence is summarized in `docs/qa.md`. Existing installations
+apply the release through **Save & update** without reinstalling or clearing data.
+The local developer lab stays unavailable in production. Deployment receipts
+and generated browser artifacts remain ignored; only source and tests are pushed.
+
+
 ## Public GitHub Pages, November 7, 2026
 
 The user authorized making `miroslavreznik/moris` public and publishing the app
