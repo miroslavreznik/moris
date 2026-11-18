@@ -5,12 +5,25 @@ const path = require('node:path');
 const base = process.env.MORIS_TEST_URL || 'http://127.0.0.1:4173';
 const output = path.resolve('test-results');
 const nav = (page, name) => page.locator('.bottom-nav').getByRole('button', { name, exact: true }).click();
+const observeSound = context => context.addInitScript(() => {
+  const NativeAudioContext = window.AudioContext;
+  window.__morisSoundStarts = 0;
+  window.AudioContext = class extends NativeAudioContext {
+    createOscillator() {
+      const oscillator = super.createOscillator();
+      const start = oscillator.start.bind(oscillator);
+      oscillator.start = (...args) => { window.__morisSoundStarts++; return start(...args); };
+      return oscillator;
+    }
+  };
+});
 let browser;
 
 (async () => {
   await mkdir(output, { recursive: true });
   browser = await chromium.launch({ headless: true, ...(process.platform === 'win32' ? { channel: process.env.MORIS_BROWSER || 'msedge' } : {}) });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Europe/Budapest', acceptDownloads: true });
+  await observeSound(context);
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -46,6 +59,7 @@ let browser;
   await page.getByRole('button', { name: 'Complete A moment outside today', exact: true }).click();
   assert.equal(await page.locator('.today-moris .moris-art').getAttribute('data-motion'), 'all-done');
   await page.getByText('40 XP', { exact: true }).first().waitFor();
+  assert.equal(await page.evaluate(() => window.__morisSoundStarts), 4);
   console.log('PASS three completion reactions, a skippable evolution at 3 wins, and a larger last-goal reaction retain the personal appearance');
 
   await nav(page, 'Moris');
@@ -75,22 +89,42 @@ let browser;
   console.log('PASS all seven forms carry the chosen color and quirk, the editor fits 320px, and reload preserves appearance and progress');
 
   await nav(page, 'Settings');
+  assert.equal(await page.getByRole('heading', { name: 'A little more delight.', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('checkbox', { name: /Completion sounds|Extra animations/ }).count(), 0);
+  await page.screenshot({ path: path.join(output, 'settings-always-on-delight-mobile.png'), fullPage: true });
   const downloadEvent = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export backup', exact: true }).click();
   const download = await downloadEvent, backupPath = path.join(output, 'personal-moris-backup.json');
   await download.saveAs(backupPath);
   const backup = JSON.parse(await readFile(backupPath));
   assert.equal(backup.settings.morisColor, 'moss'); assert.equal(backup.settings.morisDetail, 'tuft');
+  assert.equal(backup.settings.soundEnabled, true); assert.equal(backup.settings.animationsEnabled, true);
   const restoredContext = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Europe/Budapest', acceptDownloads: true });
+  await observeSound(restoredContext);
   const restored = await restoredContext.newPage();
+  await restored.clock.setFixedTime(new Date('2026-11-04T12:00:00+01:00'));
   await restored.goto(base); await restored.getByRole('button', { name: 'Start with a blank page', exact: true }).click();
   await nav(restored, 'Settings');
-  await restored.getByLabel('Choose Moris backup file', { exact: true }).setInputFiles(backupPath);
+  const legacyBackup = structuredClone(backup);
+  legacyBackup.settings.soundEnabled = false; legacyBackup.settings.animationsEnabled = false;
+  await restored.getByLabel('Choose Moris backup file', { exact: true }).setInputFiles({ name: 'legacy-personal-moris-backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(legacyBackup)) });
   await restored.getByRole('button', { name: 'Back up & replace records', exact: true }).click();
+  await restored.getByRole('button', { name: /Download the safety copy/ }).waitFor();
+  const normalizedDownloadEvent = restored.waitForEvent('download');
+  await restored.getByRole('button', { name: 'Export backup', exact: true }).click();
+  const normalizedDownload = await normalizedDownloadEvent, normalizedPath = path.join(output, 'personal-moris-normalized-backup.json');
+  await normalizedDownload.saveAs(normalizedPath);
+  const normalized = JSON.parse(await readFile(normalizedPath));
+  assert.equal(normalized.settings.soundEnabled, true); assert.equal(normalized.settings.animationsEnabled, true);
   await nav(restored, 'Today');
   await restored.locator('.today-moris .moris-art[data-color="moss"][data-detail="tuft"]').waitFor();
   await restored.getByText('40 XP', { exact: true }).first().waitFor();
-  console.log('PASS export and restore into another installation preserve the personal Moris, all four completions, and XP');
+  await restored.getByRole('button', { name: 'Undo Read a few pages today', exact: true }).click();
+  await restored.getByRole('button', { name: 'Complete Read a few pages today', exact: true }).click();
+  await restored.getByText('40 XP', { exact: true }).first().waitFor();
+  assert.equal(await restored.evaluate(() => window.__morisSoundStarts), 1);
+  assert.notEqual(await restored.locator('.today-moris .moris-character').evaluate(element => getComputedStyle(element).animationName), 'none');
+  console.log('PASS settings omit delight controls; legacy false flags restore with sounds and animations enabled while preserving appearance, completions and XP');
 
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload();
@@ -104,13 +138,10 @@ let browser;
   await page.getByRole('button', { name: 'Say hello to Moris', exact: true }).click();
   assert.equal(await page.locator('.today-moris .moris-character').evaluate(element => getComputedStyle(element).animationName), 'none');
   assert.equal(await page.locator('.today-moris .moris-eye').evaluate(element => getComputedStyle(element).animationName), 'none');
-  await nav(page, 'Settings');
-  await page.getByRole('checkbox', { name: /Extra animations/ }).uncheck();
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await nav(page, 'Today');
   await page.getByRole('button', { name: 'Say hello to Moris', exact: true }).click();
-  assert.equal(await page.locator('.today-moris .moris-character').evaluate(element => getComputedStyle(element).animationName), 'none');
-  console.log('PASS offline launch retains appearance; system reduced motion and the app preference both disable creature movement');
+  assert.notEqual(await page.locator('.today-moris .moris-character').evaluate(element => getComputedStyle(element).animationName), 'none');
+  console.log('PASS offline launch retains appearance; system reduced motion disables movement and animations return with no motion preference');
   assert.deepEqual(errors, []);
   await browser.close();
 })().catch(async error => { console.error(error); await browser?.close(); process.exitCode = 1; });

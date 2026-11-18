@@ -14,7 +14,8 @@
     "test:evolution": "node scripts/evolution-check.cjs",
     "test:reminders": "node scripts/reminder-check.cjs",
     "test:public-api": "node scripts/public-api-check.mjs",
-    "test:companion": "node scripts/companion-check.cjs"
+    "test:companion": "node scripts/companion-check.cjs",
+    "test:duration": "node scripts/duration-check.cjs"
   },
   "dependencies": {
     "@block65/webcrypto-web-push": "2.0.0",

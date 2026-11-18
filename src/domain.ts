@@ -7,7 +7,7 @@ export type Schedule =
   | { type: 'weekdays'; days: number[] }
   | { type: 'weekly_target'; targetCount: number };
 export type HabitPause = { from: Day; until?: Day };
-export type Habit = { id: string; title: string; icon: string; color: string; createdAt: string; startDate: Day; archivedAt?: string; archivedOn?: Day; pauses?: HabitPause[] };
+export type Habit = { id: string; title: string; icon: string; color: string; createdAt: string; startDate: Day; endDate?: Day; archivedAt?: string; archivedOn?: Day; pauses?: HabitPause[] };
 export type Revision = { id: string; habitId: string; effectiveFrom: Day; schedule: Schedule };
 export type Completion = { id: string; habitId: string; localDate: Day; timeZone: string; createdAt: string };
 export type OneOffPlan = { id: string; title: string; date: Day; completed: boolean };
@@ -15,7 +15,7 @@ export type Settings = Appearance & { soundEnabled: boolean; animationsEnabled: 
 export type Snapshot = { habits: Habit[]; revisions: Revision[]; completions: Completion[]; plans: OneOffPlan[]; settings: Settings; onboardingComplete: boolean };
 export type DayState = 'completed' | 'due' | 'missed' | 'not_scheduled' | 'future';
 export const MAX_TITLE_LENGTH = 100;
-export const DEFAULT_SETTINGS: Settings = { ...DEFAULT_APPEARANCE, soundEnabled: false, animationsEnabled: true, locale: 'en', celebratedStage: 0 };
+export const DEFAULT_SETTINGS: Settings = { ...DEFAULT_APPEARANCE, soundEnabled: true, animationsEnabled: true, locale: 'en', celebratedStage: 0 };
 export const EMPTY: Snapshot = { habits: [], revisions: [], completions: [], plans: [], settings: DEFAULT_SETTINGS, onboardingComplete: false };
 export const STAGES = [
   { name: 'Proto-Moris', xp: 0, description: 'One cell. Several opinions. A tiny beginning with unreasonable potential.' },
@@ -26,8 +26,9 @@ export const STAGES = [
   { name: 'Cosmic Moris', xp: 1200, description: 'Outgrew the pond. Acquired an orbit. Still occasionally bumps into things.' },
   { name: 'Moris the Infinite', xp: 2000, description: 'Has transcended several dimensions. Still needs a little nudge to go for a walk.' },
 ] as const;
-export const ICONS = ['book', 'walk', 'sun', 'move', 'spark', 'heart', 'coffee', 'pen'] as const;
-export const COLORS = ['#1839d5', '#c24f24', '#477246', '#8d4b90', '#2d7388'];
+export const ICONS = ['book', 'walk', 'sun', 'move', 'spark', 'heart', 'coffee', 'pen', 'water', 'sleep', 'focus', 'food'] as const;
+export const COLORS = ['#1839d5', '#c24f24', '#477246', '#8d4b90', '#2d7388', '#9a710b', '#b64f73'];
+export const COLOR_NAMES = ['cobalt', 'rust', 'green', 'purple', 'teal', 'mustard', 'rose'] as const;
 export const uid = () => crypto.randomUUID();
 export function today(now = new Date()): Day { return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`; }
 export function timeZone(): string { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; }
@@ -38,6 +39,15 @@ export function isDay(value: unknown): value is Day {
     && Number.isFinite(serial(value)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
 }
 export function addDays(day: Day, amount: number): Day { return new Date((serial(day) + amount) * 86400000).toISOString().slice(0, 10); }
+export function addMonths(day: Day, amount: number): Day {
+  const date = new Date(`${day}T12:00:00Z`), dayOfMonth = date.getUTCDate();
+  date.setUTCDate(1);
+  date.setUTCMonth(date.getUTCMonth() + amount);
+  const lastDay = new Date(date.getTime());
+  lastDay.setUTCMonth(lastDay.getUTCMonth() + 1, 0);
+  date.setUTCDate(Math.min(dayOfMonth, lastDay.getUTCDate()));
+  return date.toISOString().slice(0, 10);
+}
 export function weekday(day: Day): number { return new Date(`${day}T12:00:00Z`).getUTCDay() || 7; }
 export function monday(day: Day): Day { return addDays(day, 1 - weekday(day)); }
 export function dates(from: Day, to: Day): Day[] { const out: Day[] = []; for (let day = from; day <= to; day = addDays(day, 1)) out.push(day); return out; }
@@ -49,6 +59,7 @@ function pauseAt(habit: Habit, day: Day): HabitPause | undefined {
   return habit.pauses?.find(pause => pause.from <= day && (!pause.until || day < pause.until));
 }
 export function pausedOn(habit: Habit, day: Day): boolean { return pauseAt(habit, day) !== undefined; }
+export function endedOn(habit: Habit, day: Day): boolean { return habit.endDate !== undefined && day > habit.endDate; }
 export function pauseHabit(habit: Habit, day: Day): Habit {
   if (habit.archivedAt || pausedOn(habit, day)) return habit;
   const pauses = [...habit.pauses ?? []];
@@ -69,7 +80,7 @@ export function resumeHabit(habit: Habit, day: Day): Habit {
   return history.length ? { ...resumed, pauses: history } : resumed;
 }
 function withinHabitLifetime(habit: Habit, day: Day): boolean {
-  return day >= habit.startDate && (!habit.archivedOn || day < habit.archivedOn);
+  return day >= habit.startDate && !endedOn(habit, day) && (!habit.archivedOn || day < habit.archivedOn);
 }
 export function activeOn(habit: Habit, day: Day): boolean { return withinHabitLifetime(habit, day) && !pausedOn(habit, day); }
 export function scheduled(schedule: Schedule, day: Day): boolean {
@@ -106,12 +117,13 @@ export function weekInfo(habit: Habit, revisions: Revision[], completions: Compl
   const activeDays = applicableDays.filter(day => !pausedOn(habit, day));
   // A shortened quota period does not break a streak if it is unfinished.
   const partial = activeDays.length < 7;
-  const open = end >= now && (!pausedOn(habit, now) || activeDays.some(day => day >= now));
+  const open = end >= now && !endedOn(habit, now) && (!pausedOn(habit, now) || activeDays.some(day => day >= now));
   const state = start > now ? 'future' : count >= target ? 'completed' : open ? 'due' : partial ? 'partial' : 'missed';
   return { start, end, count, target, state, partial, completionDates };
 }
 export function habitStats(habit: Habit, revisions: Revision[], completions: Completion[], now: Day): { current: number; best: number; unit: string; total: number } {
-  const type = revisionAt(revisions, habit.id, now)?.schedule.type;
+  const through = habit.endDate && habit.endDate < now ? habit.endDate : now;
+  const type = revisionAt(revisions, habit.id, through)?.schedule.type;
   const recorded = new Set(completions.filter(c => c.habitId === habit.id).map(c => c.localDate));
   const total = recorded.size;
   let run = 0, best = 0;
@@ -190,7 +202,7 @@ export function toggleCompletion(snapshot: Snapshot, habitId: string, day: Day, 
   if (day > now) throw new Error('Future days cannot be completed.');
   if (existing) return { ...snapshot, completions: snapshot.completions.filter(c => c.id !== existing.id) };
   const revision = revisionAt(snapshot.revisions, habitId, day);
-  if (pausedOn(habit, day) || (!withinHabitLifetime(habit, day) && day !== habit.archivedOn) || !revision || !scheduled(revision.schedule, day)) throw new Error('This habit was not scheduled on that date.');
+  if (endedOn(habit, day) || pausedOn(habit, day) || (!withinHabitLifetime(habit, day) && day !== habit.archivedOn) || !revision || !scheduled(revision.schedule, day)) throw new Error('This habit was not scheduled on that date.');
   return { ...snapshot, completions: [...snapshot.completions, { id: `${habitId}:${day}`, habitId, localDate: day, timeZone: zone, createdAt: new Date().toISOString() }] };
 }
 

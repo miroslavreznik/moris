@@ -1,9 +1,68 @@
 import { describe, expect, it } from 'vitest';
-import { type Habit, type Revision, type Completion, type Schedule, type Snapshot, EMPTY, STAGES, activeOn, addDays, monday, weekday, dayState, habitStats, plannedProgress, weekInfo, xpOf, stageOf, toggleCompletion, demoSnapshot, revisionAt, pauseHabit, pausedOn, resumeHabit } from './domain';
+import { type Habit, type Revision, type Completion, type Schedule, type Snapshot, EMPTY, STAGES, activeOn, addDays, addMonths, endedOn, monday, weekday, dayState, habitStats, plannedProgress, weekInfo, xpOf, stageOf, toggleCompletion, demoSnapshot, revisionAt, pauseHabit, pausedOn, resumeHabit } from './domain';
 const habit: Habit = { id: 'read', title: 'Read', icon: 'book', color: '#1839d5', createdAt: '2026-10-19T12:00:00Z', startDate: '2026-10-19' };
 const rev = (schedule: Schedule, effectiveFrom = habit.startDate): Revision => ({ id: `revision-${effectiveFrom}`, habitId: habit.id, effectiveFrom, schedule });
 const done = (...days: string[]): Completion[] => days.map(localDate => ({ id: `${habit.id}:${localDate}`, habitId: habit.id, localDate, timeZone: 'Europe/Budapest', createdAt: `${localDate}T12:00:00Z` }));
 const snapshot = (schedule: Schedule = { type: 'daily' }): Snapshot => ({ ...EMPTY, settings: { ...EMPTY.settings }, habits: [habit], revisions: [rev(schedule)], completions: [] });
+
+describe('bounded habit durations', () => {
+  it('adds calendar months with month-end clamping across leap years and year boundaries', () => {
+    expect(addMonths('2027-01-31', 1)).toBe('2027-02-28');
+    expect(addMonths('2028-01-31', 1)).toBe('2028-02-29');
+    expect(addMonths('2028-02-29', 12)).toBe('2029-02-28');
+    expect(addMonths('2027-03-31', -1)).toBe('2027-02-28');
+    expect(addDays(addMonths('2026-11-18', 3), -1)).toBe('2027-02-17');
+  });
+
+  const schedules: [Schedule, number][] = [
+    [{ type: 'daily' }, 4],
+    [{ type: 'interval', everyNDays: 3, anchorDate: habit.startDate }, 2],
+    [{ type: 'weekdays', days: [1, 4, 5] }, 2],
+    [{ type: 'weekly_target', targetCount: 2 }, 2],
+  ];
+  it.each(schedules)('includes the last date and stops future obligations for %j', (schedule, planned) => {
+    const bounded = { ...habit, endDate: '2026-10-22' }, revisions = [rev(schedule)];
+    expect(endedOn(bounded, bounded.endDate)).toBe(false);
+    expect(activeOn(bounded, bounded.endDate)).toBe(true);
+    expect(dayState(bounded, revisions, [], bounded.endDate, bounded.endDate)).toBe('due');
+    expect(endedOn(bounded, '2026-10-23')).toBe(true);
+    expect(activeOn(bounded, '2026-10-23')).toBe(false);
+    expect(dayState(bounded, revisions, [], '2026-10-23', '2026-10-23')).toBe('not_scheduled');
+    expect(plannedProgress(bounded, revisions, done('2026-10-19', '2026-10-22'), habit.startDate, '2026-11-02')).toEqual({ completed: 2, planned });
+    expect(plannedProgress(bounded, revisions, [], '2026-10-23', '2026-11-02')).toEqual({ completed: 0, planned: 0 });
+  });
+
+  it('closes a shortened final quota week without a miss and retains completed weekly streaks', () => {
+    const bounded = { ...habit, startDate: '2026-10-12', endDate: '2026-10-21' };
+    const revisions = [rev({ type: 'weekly_target', targetCount: 2 }, bounded.startDate)];
+    const records = done('2026-10-12', '2026-10-13', '2026-10-20');
+    expect(weekInfo(bounded, revisions, records, '2026-10-19', '2026-10-21')).toMatchObject({ state: 'due', partial: true });
+    expect(weekInfo(bounded, revisions, records, '2026-10-19', '2026-10-22')).toMatchObject({ count: 1, state: 'partial', partial: true });
+    expect(weekInfo(bounded, revisions, records, '2026-10-26', '2026-10-29').state).toBe('not_scheduled');
+    expect(habitStats(bounded, revisions, records, '2026-11-30')).toMatchObject({ current: 1, best: 1, total: 3 });
+    expect(habitStats(bounded, revisions, [...records, ...done('2026-10-21')], '2026-11-30')).toMatchObject({ current: 2, best: 2, total: 4 });
+  });
+
+  it('keeps completed history and permits correction through the end date without inventing later XP', () => {
+    const bounded = { ...habit, endDate: '2026-10-22' };
+    const initial = { ...snapshot(), habits: [bounded], completions: done('2026-10-19', '2026-10-20', '2026-10-21') };
+    const corrected = toggleCompletion(initial, habit.id, bounded.endDate, '2026-11-30');
+    expect(xpOf(corrected.completions)).toBe(40);
+    expect(habitStats(bounded, initial.revisions, corrected.completions, '2026-11-30')).toMatchObject({ current: 4, best: 4, total: 4 });
+    expect(toggleCompletion(corrected, habit.id, bounded.endDate, '2026-11-30').completions).toEqual(initial.completions);
+    expect(() => toggleCompletion(corrected, habit.id, '2026-10-23', '2026-11-30')).toThrow('not scheduled');
+    const archived = { ...initial, habits: [{ ...bounded, archivedOn: '2026-10-25', archivedAt: '2026-10-25T18:00:00Z' }] };
+    expect(() => toggleCompletion(archived, habit.id, '2026-10-25', '2026-11-30')).toThrow('not scheduled');
+    expect(activeOn(habit, '2026-11-30')).toBe(true);
+  });
+
+  it('keeps the ended period\'s streak type when a preplanned revision falls after the end', () => {
+    const bounded = { ...habit, endDate: '2026-10-22' };
+    const revisions = [rev({ type: 'daily' }), rev({ type: 'weekly_target', targetCount: 2 }, '2026-10-23')];
+    const records = done('2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22');
+    expect(habitStats(bounded, revisions, records, '2026-11-30')).toMatchObject({ current: 4, best: 4, unit: 'scheduled completions', total: 4 });
+  });
+});
 
 describe('planned progress', () => {
   it('counts scheduled dates in the window, uses their original schedule and omits pauses', () => {

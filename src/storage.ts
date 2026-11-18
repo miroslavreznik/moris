@@ -23,7 +23,8 @@ export async function loadSnapshot(database = db): Promise<Snapshot> {
       database.habits.toArray(), database.revisions.toArray(), database.completions.toArray(), database.plans.toArray(), database.meta.get('config'),
     ]);
     const value = config?.value as Partial<Snapshot> | undefined;
-    return { habits, revisions, completions, plans, settings: { ...EMPTY.settings, ...value?.settings }, onboardingComplete: value?.onboardingComplete ?? false };
+    // Keep legacy preference fields compatible while always enabling completion feedback.
+    return { habits, revisions, completions, plans, settings: { ...EMPTY.settings, ...value?.settings, soundEnabled: true, animationsEnabled: true }, onboardingComplete: value?.onboardingComplete ?? false };
   });
 }
 async function delta<T extends { id: string }>(table: Table<T, string>, before: T[], after: T[]): Promise<void> {

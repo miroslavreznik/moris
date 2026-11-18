@@ -73,7 +73,7 @@ A cobalt typographic poster with an orange cut-paper cyclops. Oversized condense
 1. React + TypeScript + Vite foundation, PWA manifest/icons/service worker, versioned IndexedDB repository, offline shell, and safe update handling.
 2. Independent scheduling and progress domain: calendar-date arithmetic, schedule revisions, four schedules, unique daily completions, deterministic streaks, weekly partial-start handling, and XP. Verify these with domain tests.
 3. English onboarding, habit creation/editing/archiving, Today, history corrections, progress, and completion undo.
-4. At least three original vector character forms, non-blocking completion effects, optional sound, reduced motion, and milestone celebrations.
+4. At least three original vector character forms, non-blocking completion effects, completion sound, system reduced motion, and milestone celebrations.
 5. Versioned validated JSON export/import, safety backup, browser/offline/update tests, accessibility and responsive review.
 
 No accounts, subscriptions, backend, external analytics, or cloud synchronization are required for this MVP.

@@ -59,6 +59,32 @@ const base = process.env.MORIS_TEST_URL || 'http://127.0.0.1:4173';
       page.getByRole('button', { name: 'Resume A private daily goal', exact: true }).click(),
     ]);
     console.log('PASS pausing the only habit suppresses evening reminders and resuming restores eligibility');
+    const durationDates = await page.evaluate(() => {
+      const format = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      const original = new Date(), next = new Date(original);
+      next.setDate(next.getDate() + 1); next.setHours(12, 0, 0, 0);
+      return { today: format(original), originalTime: +original, nextTime: +next };
+    });
+    await page.getByRole('button', { name: 'Edit A private daily goal', exact: true }).click();
+    await page.getByLabel('Duration', { exact: true }).selectOption('date');
+    await page.getByLabel('End date', { exact: true }).fill(durationDates.today);
+    await Promise.all([
+      page.waitForResponse(response => response.ok() && response.url().endsWith('/api/reminders/subscription') &&
+        response.request().postDataJSON()?.days?.[0]?.needed === true &&
+        response.request().postDataJSON()?.days?.slice(1).every(day => !day.needed)),
+      page.getByRole('button', { name: 'Save changes', exact: true }).click(),
+    ]);
+    await page.clock.setFixedTime(durationDates.nextTime);
+    await Promise.all([waitForEligibility(false), page.reload()]);
+    await page.locator('.bottom-nav').getByRole('button', { name: 'Today', exact: true }).click();
+    assert.equal(await page.getByRole('button', { name: 'Complete A private daily goal today', exact: true }).count(), 0);
+    await page.locator('.bottom-nav').getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Edit A private daily goal', exact: true }).click();
+    await page.getByLabel('Duration', { exact: true }).selectOption('ongoing');
+    await Promise.all([waitForEligibility(true), page.getByRole('button', { name: 'Save changes', exact: true }).click()]);
+    await page.clock.setFixedTime(durationDates.originalTime);
+    await Promise.all([waitForEligibility(true), page.reload()]);
+    console.log('PASS the inclusive end date limits reminder eligibility; expired habits leave Today and extending restores reminders');
     await page.locator('.bottom-nav').getByRole('button', { name: 'Today', exact: true }).click();
     await context.setOffline(true);
     await page.getByRole('button', { name: 'Complete A private daily goal today', exact: true }).click();

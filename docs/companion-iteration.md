@@ -33,8 +33,10 @@ new character species in this iteration.
 - Evolution uses a short old-form/new-form transformation with a halo and small
   decorative sparks. Skip animation, Continue, Close and Escape remain usable
   immediately. The appearance survives the transformation.
-- Both the system's reduced-motion preference and Extra animations off disable
-  creature, eye, XP and transformation movement. Static progress remains visible.
+- Completion sounds and animations are always enabled, including when opening
+  older saved settings or restoring a backup that previously disabled them.
+- The system's reduced-motion preference disables creature, eye, XP and
+  transformation movement. Static progress remains visible.
 - No sad, disappointed or punitive reaction is added for unfinished days.
 
 ## Progression
@@ -71,7 +73,8 @@ old settings records, valid appearance backup round trips, legacy defaults and
 invalid imports. The companion browser suite checks live preview and selection in
 onboarding, greetings without XP, completion reaction variety, the first unlock
 at 3 wins, skipped transformation, all seven personalized forms, reload, 320 px
-layout, export/restore into another installation, offline launch and both motion
-preferences. Original browser, evolution and reminder suites remain regression
+layout, export/restore into another installation, legacy sound/animation settings,
+offline launch and the system's reduced-motion preference. Original browser,
+evolution and reminder suites remain regression
 checks. A further update smoke check verifies an existing config/history remains
 intact across service-worker updates.

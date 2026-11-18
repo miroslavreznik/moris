@@ -34,13 +34,15 @@ The production preview is normally at `http://localhost:4173`. The development s
 ## What is implemented
 
 - English onboarding with suggested/custom habits and configurable schedules.
+- Twelve habit icons and seven subtle icon accent colors, available when creating or editing a habit.
 - Start with one new habit or add more. Pause and resume habits from Settings. Paused dates are skipped and past entries and XP stay available in Progress.
-- Create, edit, and archive habits; archiving retains history and XP.
+- Create habits and edit, pause/resume or archive them directly from Today and Progress; archiving retains history and XP.
 - Daily, interval, selected-weekday, and flexible weekly-target schedules.
+- Optional duration for every repeat type: keep going, choose a number of days/weeks/months, or set an end date. Ended habits keep history and XP in a collapsed Progress section. See [Habit duration and research](docs/habit-duration.md).
 - Immediate one-tap completion, undo, a seven-day strip on Today, and local persistence.
 - Separate goal overviews, 35-day calendars, historical corrections, current/best streaks, and up to 12 weeks of quota history.
 - Prospective schedule revisions. A completed current day keeps its schedule; changes then start tomorrow or later. Partial first/changed weeks cannot become failed weekly streaks.
-- Seven original SVG evolution stages, derived XP, skippable transformation scenes, a next-evolution meter, optional interaction-triggered audio, and reduced-motion support.
+- Seven original SVG evolution stages, derived XP, skippable transformation scenes, a next-evolution meter, completion sounds and animations enabled for everyone, and system reduced-motion support.
 - A personal Moris: five colors and one of three little quirks, shared by every evolution, with a live preview in onboarding and the Moris/Settings editor. Appearance is included in backups; older data opens with the familiar orange color and freckles.
 - A welcome reaction, quiet breathing/blinking, three completion reactions and a larger last-fixed-goal reaction. Saying hello to Moris is playful without changing XP.
 - IndexedDB via Dexie, a unique habit/date index, versioned schema, and transactional writes.

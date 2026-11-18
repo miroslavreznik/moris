@@ -49,4 +49,19 @@ describe('gentle reminder eligibility', () => {
 
     expect(reminderPlan(data, '2026-11-04').slice(0, 4).map(day => day.needed)).toEqual([true, false, false, true]);
   });
+  it('stops reminders after an inclusive end date for every repeat type', () => {
+    const schedules: Snapshot['revisions'][number]['schedule'][] = [
+      { type: 'daily' },
+      { type: 'interval', everyNDays: 2, anchorDate: '2026-11-02' },
+      { type: 'weekdays', days: [1, 3, 7] },
+      { type: 'weekly_target', targetCount: 2 },
+    ];
+    for (const schedule of schedules) {
+      const data = sample(schedule);
+      data.habits[0].endDate = '2026-11-08';
+      expect(remainingForReminder(data, '2026-11-08')).toHaveLength(1);
+      expect(remainingForReminder(data, '2026-11-09')).toHaveLength(0);
+      expect(reminderPlan(data, '2026-11-09').some(day => day.needed)).toBe(false);
+    }
+  });
 });

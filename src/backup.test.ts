@@ -11,8 +11,9 @@ describe('safe backup parsing', () => {
   it('restores older backups with the original color and default quirk', () => {
     const backup = JSON.parse(JSON.stringify({ ...sample(), schemaVersion: 1 }));
     delete backup.settings.morisColor; delete backup.settings.morisDetail; delete backup.plans;
+    backup.settings.soundEnabled = false; backup.settings.animationsEnabled = false;
     const restored = parseBackup(backup);
-    expect(restored.settings).toMatchObject({ morisColor: 'tangerine', morisDetail: 'freckles' });
+    expect(restored.settings).toMatchObject({ soundEnabled: true, animationsEnabled: true, morisColor: 'tangerine', morisDetail: 'freckles' });
     expect(restored.plans).toEqual([]);
   });
   it('restores v2 plans and defaults to no pauses', () => {
@@ -65,7 +66,7 @@ describe('safe backup parsing', () => {
     backup.habits[1].archivedAt = '2026-10-25T18:00:00Z';
 
     const restored = parseBackup(JSON.parse(JSON.stringify(backup)));
-    expect(backup.schemaVersion).toBe(3);
+    expect(backup.schemaVersion).toBe(4);
     expect(restored.habits).toEqual(backup.habits);
     expect(restored.completions).toEqual(backup.completions);
     const completionDays = restored.completions.filter(c => c.habitId === habit.id).map(c => c.localDate);
@@ -88,7 +89,35 @@ describe('safe backup parsing', () => {
       expect(() => parseBackup({ ...backup, habits })).toThrow('habit pause');
     }
   });
-  it('rejects unsupported versions before changing anything', () => { expect(() => parseBackup({ ...sample(), schemaVersion: 4 })).toThrow('version'); });
+  it('round-trips inclusive end dates alongside pauses, history and ongoing habits', () => {
+    const backup = sample();
+    backup.habits[0].endDate = '2026-10-25';
+    backup.habits[0].pauses = [{ from: '2026-10-19', until: '2026-10-21' }];
+    const restored = parseBackup(JSON.parse(JSON.stringify(backup)));
+    expect(restored.habits).toEqual(backup.habits);
+    expect(restored.completions).toEqual(backup.completions);
+    expect(restored.habits[1].endDate).toBeUndefined();
+  });
+  it('opens earlier formats as ongoing and retains pauses in version 3', () => {
+    const backup = sample();
+    backup.habits[0].pauses = [{ from: '2026-10-19' }];
+    for (const schemaVersion of [1, 2, 3]) {
+      const restored = parseBackup({ ...backup, schemaVersion });
+      expect(restored.habits.every(habit => habit.endDate === undefined)).toBe(true);
+      expect(restored.habits[0].pauses).toEqual(schemaVersion === 3 ? backup.habits[0].pauses : undefined);
+      expect(restored.completions).toEqual(backup.completions);
+    }
+  });
+  it('rejects malformed or reversed end dates and end dates before a recorded completion', () => {
+    for (const endDate of [null, '', 42, '2026-02-30', '2026-09-01']) {
+      const backup = sample();
+      expect(() => parseBackup({ ...backup, habits: [{ ...backup.habits[0], endDate }, ...backup.habits.slice(1)] })).toThrow('end date');
+    }
+    const backup = sample();
+    backup.habits[0].endDate = '2026-10-24';
+    expect(() => parseBackup(backup)).toThrow('outside its historical schedule');
+  });
+  it('rejects unsupported versions before changing anything', () => { expect(() => parseBackup({ ...sample(), schemaVersion: 5 })).toThrow('version'); });
   it('rejects a current backup without a plans array', () => {
     expect(() => parseBackup({ ...sample(), plans: undefined })).toThrow('plan records');
   });
